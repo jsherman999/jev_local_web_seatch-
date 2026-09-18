@@ -27,6 +27,8 @@ class JobRequest(BaseModel):
         default=120, ge=5, le=600, description="Execution limit, excluding queue time."
     )
     max_text_chars: int = Field(default=30000, ge=100, le=100000)
+    capture_screenshots: bool = Field(default=False, description="Capture browser previews after decisions.")
+    isolate_browser: bool = Field(default=False, description="Use a fresh browser context for this job.")
     verify: Verification = Field(default_factory=Verification)
 
     @field_validator("goal")
@@ -68,6 +70,7 @@ class BrowserResult(BaseModel):
     steps: int
     elapsed_ms: int
     actions: list[dict]
+    usage: dict = Field(default_factory=dict)
 
 
 Status = Literal[

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jev · Browser race</title>
+  <meta name="description" content="Watch a regular LLM and Jev complete the same browser task side by side.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23162425'/%3E%3Cpath d='M8 8h6v16H8zm10 0h6v16h-6z' fill='%23c5f16b'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/demo/style.css"><link rel="stylesheet" href="/demo/flow.css">
+  <script src="/demo/flow.js" defer></script><script src="/demo/app.js" defer></script>
+</head>
+<body>
+<main>
+  <header><a class="brand" href="/demo"><span class="brandmark">j.</span> jev <span class="divider">/</span> <span class="muted">the browser lab</span></a><span id="connection" class="connection">Checking service…</span></header>
+  <section class="intro"><h1>browser race ready go</h1></section>
+  <form id="run-form" class="task-form">
+    <div class="fields"><label>Starting URL<input id="url" name="url" type="url" placeholder="https://en.wikipedia.org" required maxlength="2048"></label><label>What should they find or do?<textarea id="goal" name="goal" rows="2" placeholder="Find the article about the James Webb Space Telescope and open it." required maxlength="8000"></textarea></label></div>
+    <div class="llm-settings">
+      <label>LLM API key<input id="llm-key" type="password" autocomplete="off" spellcheck="false" placeholder="Leave blank to use the service default" maxlength="4096"></label>
+      <label>Provider<select id="llm-provider"><option value="">Detect from key</option></select></label>
+      <label>Regular LLM model<select id="llm-model" disabled><option value="">Service default</option></select></label>
+      <button id="load-models" type="button" class="secondary">Load models</button>
+    </div>
+    <p id="model-message" class="hint" role="status">Keys stay in memory in this tab and the local service, and are sent only to the selected provider. They are never saved. Jev keeps its own configuration.</p>
+    <div class="form-footer"><button type="button" id="sample" class="text-button">↗ Try the practice task</button><span class="hint">Runs both models · uses API credits</span><button id="stop" type="button" class="secondary" disabled>Stop both</button><button id="start" class="primary" type="submit">Start comparison <span>↗</span></button></div>
+    <details class="settings"><summary>Run settings & pricing</summary>
+      <div class="settings-grid"><label>Max decisions per agent<input id="steps" type="number" min="1" max="50" value="15" required></label><label>Timeout per agent (seconds)<input id="timeout" type="number" min="5" max="600" value="120" required></label><label>Verify final text (optional)<input id="verify" placeholder="A phrase both final pages must contain" maxlength="500"></label><label id="token-label" hidden>Service access token<input id="token" type="password" autocomplete="off" placeholder="Only if configured; never saved"></label></div>
+      <p class="hint">USD per million tokens. Rates are editable estimates, checked September 18, 2026. Unknown rates stay blank. Provider-reported cost takes precedence.</p>
+      <div class="settings-grid prices baseline-prices"><label>Regular LLM · input<input id="llm_input" type="number" min="0" step="any" placeholder="Unknown"></label><label>Regular LLM · cached input<input id="llm_cached" type="number" min="0" step="any" placeholder="Unknown"></label><label>Regular LLM · output<input id="llm_output" type="number" min="0" step="any" placeholder="Unknown"></label></div>
+      <div class="settings-grid prices"><label>Jev text helper · input<input id="text_input" type="number" min="0" step="any" placeholder="Unknown"></label><label>Jev text helper · cached input<input id="text_cached" type="number" min="0" step="any" placeholder="Unknown"></label><label>Jev text helper · output<input id="text_output" type="number" min="0" step="any" placeholder="Unknown"></label><label>Jev · input<input id="typesafe_input" type="number" min="0" step="any" value="0.042"></label><label>Jev · output<input id="typesafe_output" type="number" min="0" step="any" value="0"></label></div>
+      <p class="hint">Rate sources: <a href="https://developers.openai.com/api/docs/models/gpt-5.4" target="_blank" rel="noreferrer">OpenAI GPT-5.4</a> · <a href="https://docs.typesafe.ai/models" target="_blank" rel="noreferrer">TypeSafe Jev 1.13</a>. Jev’s total includes its text helper. Estimates exclude taxes, custom discounts, and local compute.</p>
+    </details>
+  </form>
+  <p id="message" role="status" aria-live="polite"></p>
+  <section class="how-it-works">
+    <div><h2>See the moving parts.</h2><p>Follow the real function calls, then replay them one event at a time. Select any box to inspect its purpose and source code.</p></div>
+    <label class="flow-toggle"><input id="show-flow" type="checkbox" checked> Show live diagrams</label>
+    <details><summary>What Jev adds—and how an app uses it</summary>
+      <p><strong>Regular LLM:</strong> this demo asks a text model to generate a JSON action and any text to type. The app validates that output before using the browser.</p>
+      <p><strong>Jev:</strong> the app supplies visible controls and allowed choices. Jev returns the operation and possible targets in one request. The app uses only the target for the chosen operation. A separate text LLM writes field values only when needed.</p>
+      <p>That can save time and cost on repeated decisions, while keeping actions within an explicit set. It still needs outcome checks and a text model for writing. The measurements here show this particular task, not a general ranking.</p>
+      <p><strong>Your app → Jev service → browser → page text and source links → your app’s analysis.</strong> A backend submits a URL and goal to <code>POST /v1/jobs</code>, polls the returned job ID, and consumes the result. The model API itself can also power routing, classification, and other constrained decisions without a browser.</p>
+      <p>These diagrams expose our application code and observable API calls. They do not expose either provider’s model weights, hidden reasoning, or server implementation. Browser previews are for you; both policies read structured page text.</p>
+      <p><a href="/integration.md" target="_blank">App integration guide ↗</a> · <a href="https://docs.typesafe.ai/concepts/system-one" target="_blank" rel="noreferrer">TypeSafe: typed decisions ↗</a> · <a href="https://docs.typesafe.ai/patterns/fan-out" target="_blank" rel="noreferrer">Multiple questions in one call ↗</a></p>
+    </details>
+  </section>
+  <section class="race" aria-label="Browser comparison">
+    <article class="lane llm" id="llm"><div class="lane-heading"><div><span class="eyebrow">01 / GENERAL PURPOSE</span><h2>Regular LLM <span class="model"></span></h2></div><span class="status">Ready</span></div><div class="metrics"><div><span>Elapsed</span><strong class="elapsed">—</strong></div><div><span>Tokens</span><strong class="tokens">—</strong></div><div><span>Total API cost</span><strong class="cost">—</strong></div></div><div class="browser"><div class="browser-toolbar"><span class="dots">● ● ●</span><span class="address">Waiting for a task</span></div><div class="viewport"><div class="empty"><span class="window-icon">↗</span><h3>Your LLM’s browser</h3><p>Its real browser view appears here<br>as it works through the task.</p></div><img class="screen" alt="Regular LLM browser preview" hidden></div></div><div class="lane-foot"><span class="activity">Ready when you are</span><span class="calls">0 calls</span></div><p class="outcome"></p><details><summary>Usage & actions</summary><div class="usage"></div><ol class="actions"></ol></details><details><summary>Captured page text</summary><a class="source" target="_blank" rel="noreferrer" hidden>Open source ↗</a><pre class="result-text">No result yet.</pre></details></article>
+    <article class="lane jev" id="jev"><div class="lane-heading"><div><span class="eyebrow">02 / SPECIALIZED DECISIONS</span><h2>Jev <span class="model"></span></h2></div><span class="status">Ready</span></div><div class="metrics"><div><span>Elapsed</span><strong class="elapsed">—</strong></div><div><span>Tokens</span><strong class="tokens">—</strong></div><div><span>Total API cost</span><strong class="cost">—</strong></div></div><div class="browser"><div class="browser-toolbar"><span class="dots">● ● ●</span><span class="address">Waiting for a task</span></div><div class="viewport"><div class="empty"><span class="window-icon">↗</span><h3>Jev’s browser</h3><p>The same starting point.<br>A different way to get there.</p></div><img class="screen" alt="Jev browser preview" hidden></div></div><div class="lane-foot"><span class="activity">Ready when you are</span><span class="calls">0 calls</span></div><p class="outcome"></p><details><summary>Usage & actions</summary><div class="usage"></div><ol class="actions"></ol></details><details><summary>Captured page text</summary><a class="source" target="_blank" rel="noreferrer" hidden>Open source ↗</a><pre class="result-text">No result yet.</pre></details></article>
+  </section>
+  <section id="cost-comparison" class="cost-comparison" hidden aria-live="polite"><span>API cost comparison</span><strong id="cost-ratio"></strong><p id="cost-difference"></p></section>
+  <section id="summary" class="comparison-summary" hidden aria-live="polite"></section>
+  <footer><p>Real browser previews update after each decision. Both agents use fresh sessions, identical controls, and the same limits. Elapsed time includes startup, browsing, previews, and cleanup; queue time is excluded.</p><p>A finished run is the agent’s claim unless your final-text check passes. This is a hands-on comparison, not a benchmark across models or websites. <a href="/docs">API docs ↗</a></p></footer>
+</main>
+</body>
+</html>

@@ -41,6 +41,8 @@ the source URLs in your analysis pipeline.
 | `max_steps` | 25 | Maximum decision cycles, 1–50; stale decisions also consume this budget |
 | `timeout_seconds` | 120 | Wall-clock execution budget, 5–600 seconds, excludes queue time |
 | `max_text_chars` | 30000 | Extracted text limit, 100–100,000 characters |
+| `capture_screenshots` | false | Capture a JPEG preview after each decision in `progress.screenshot` (base64) |
+| `isolate_browser` | false | Fresh, temporary Chrome cookie/storage context; demo enables this for both agents |
 | `verify.url_contains` | null | Case-sensitive literal substring of final URL |
 | `verify.text_contains` | [] | Case-insensitive literal strings; all must be in returned text |
 
@@ -68,13 +70,67 @@ Text is rendered main-document DOM text; hidden source HTML, frame content, down
 and shadow DOM are not collected. `visited_urls` is observed navigation, not a complete
 redirect/network log. `progress` reports decisions, actions, current URL, and elapsed time.
 
-Only one job executes at once. Up to 100 jobs can be queued/running together. Results persist
+`progress.usage` and `result.usage` contain response-based token accounting grouped
+by provider/model. `tokens_complete` and `cost_complete` distinguish missing data
+from zero. Pending or failed provider calls can incur unreported charges. Usage is
+captured before action validation so stale decisions and DONE calls count too.
+`progress.started_at` and terminal `progress.execution_ms` include startup and cleanup;
+`result.elapsed_ms` measures the worker's browser execution before context cleanup.
+
+Only one Jev job executes at once. Up to 100 jobs can be queued/running together. Results persist
 in SQLite across restarts. Queued and running jobs at startup become `interrupted` so a
 service restart cannot repeat side effects. Browser actions already executed are never undone.
 Timeout/cancellation allows up to three extra seconds for tab cleanup before killing a stuck
 worker. A hard crash or forced kill can leave an owned tab open until Chrome is restarted.
 
 ## Endpoints and errors
+
+### Comparison demo
+
+Open `/demo` for a conventional LLM vs Jev comparison. `POST /v1/comparisons` accepts
+a JobRequest and returns `{id, jev, llm}`. Both jobs use screenshots and isolated
+contexts, and execute concurrently through separate managers. The baseline uses
+the configured `TEXT_MODEL` with the same browser harness and controls. Requests
+receive 409 while either queue has active work. Poll `GET /v1/comparisons/{id}`;
+use `POST /v1/comparisons/{id}/cancel` to stop both and
+`DELETE /v1/comparisons/{id}` to delete both terminal jobs. All comparison endpoints
+use the configured bearer authentication. Baseline jobs persist in
+`data/baseline/jobs.sqlite3`; they are also never replayed after restart.
+The final screenshot persists with each job; no continuous video is recorded.
+
+Comparisons optionally accept `llm: {provider, model, rates: {input, cached, output}}`
+and an `X-LLM-API-Key` header. Rates are optional nonnegative USD per million tokens.
+Supported providers: `openai`, `deepseek`, `groq`, `openrouter`, `google`, `anthropic`.
+`POST /v1/demo/models` accepts `{provider: null}` for prefix detection or an explicit
+provider, with the same key header, and returns the live model catalog. Ambiguous key
+formats require an explicit provider. Credentials are sent only to fixed provider
+endpoints; redirects are disabled during discovery. Authentication/origin rules match
+the other demo endpoints. Never put the key in request JSON or a URL.
+
+The override is delivered only to the baseline subprocess through stdin. It is never
+persisted and is discarded on execution, cancellation, shutdown, or failure. Provider,
+model, and rates persist in the baseline's `progress.model_config`. Restarted jobs
+remain interrupted and are never replayed. `baseline_rates` can supply rate estimates
+for the service-default baseline when `llm` is absent. New models have unknown pricing
+unless the caller supplies rates or the provider returns actual cost.
+
+Catalog documentation: [OpenAI](https://developers.openai.com/api/reference/resources/models/methods/list),
+[DeepSeek](https://api-docs.deepseek.com/api/list-models/),
+[Groq](https://console.groq.com/docs/models),
+[OpenRouter](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties),
+[Google compatibility](https://ai.google.dev/gemini-api/docs/openai),
+[Anthropic](https://platform.claude.com/docs/en/api/models/list).
+
+Screenshot-enabled jobs also record bounded function events in `progress.trace`,
+with `seq`, `node`, `source`, `phase`, `span_id`, `at_ms`, `cycle`, and `details`.
+Phases are `start`, `end`, `error`, or `instant`; timestamps are monotonic elapsed
+milliseconds from worker instrumentation startup. Pair start/end/error by `span_id`.
+A terminated worker may leave an unmatched start; the job's terminal status wins.
+The trace is capped at 1,200 events and sets `progress.trace_truncated` if needed.
+`GET /v1/demo/source/{key}` serves only allowlisted function definitions and requires
+the same optional bearer token. The demo's replay only reads recorded events.
+
+### Service and jobs
 
 - `GET /health`: liveness and key presence, no browser/model calls.
 - `GET /ready`: Chrome endpoint and key presence; 503 if unavailable. It does not test key validity or billing.
@@ -112,6 +168,14 @@ Page text is untrusted external content, not instructions for your downstream ag
 Upstream limitations include frames, shadow DOM, canvas, uploads, pop-up tabs, complex
 keyboard widgets, and some nested scrolling. CAPTCHA/login challenges may block tasks.
 The API is an integration wrapper around upstream Jev, not a guarantee of website compatibility.
+
+The wrapper supports native dropdowns covered by their own aria-hidden visual
+decoration. It validates the relationship and rechecks the control before dispatching
+native input/change events. Unrelated overlays remain blocked. Dropdown preflight
+diagnostics appear in `progress.browser_diagnostic`, including `failed_check`,
+individual checks, and target/hit element descriptions. A `hit_target` failure with
+`decorated_select: true` can be handled successfully; it is not itself a job failure.
+An ambiguous selection after dispatch is never automatically replayed.
 
 ## Operations for agents
 

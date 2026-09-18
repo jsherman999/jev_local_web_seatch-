@@ -160,3 +160,55 @@ def test_lan_docs_and_swagger_origin(client):
         assert client.get("/docs", headers=headers).status_code == 200
         assert client.get("/openapi.json", headers=headers).status_code == 200
         assert client.post("/v1/jobs", json=BODY, headers=headers).status_code == 202
+
+
+def test_comparison_lifecycle_and_progress_merge(client):
+    assert client.get("/demo").status_code == 200
+    assert client.get("/demo/app.js").status_code == 200
+    response = client.post("/v1/comparisons", json=BODY)
+    assert response.status_code == 202
+    comparison = response.json()
+    job_id = comparison["id"]
+    for _ in range(150):
+        comparison = client.get("/v1/comparisons/" + job_id).json()
+        if all(comparison[side]["status"] in TERMINAL for side in ("jev", "llm")):
+            break
+        time.sleep(.02)
+    for side in ("jev", "llm"):
+        job = comparison[side]
+        assert job["status"] == "completed"
+        assert job["request"]["capture_screenshots"] is True
+        assert job["request"]["isolate_browser"] is True
+        assert job["progress"]["execution_ms"] >= 0
+        assert job["progress"]["started_at"]
+        assert job["progress"]["steps"] == 1
+        assert [e["phase"] for e in job["progress"]["trace"]] == ["start", "end"]
+    assert comparison["jev"]["progress"]["comparison_baseline_id"] == comparison["llm"]["id"]
+    assert client.delete("/v1/comparisons/" + job_id).status_code == 204
+    assert client.get("/v1/comparisons/" + job_id).status_code == 404
+
+
+def test_comparison_busy_cancel_and_auth(client, monkeypatch):
+    monkeypatch.setenv("JEV_API_TOKEN", "secret")
+    assert client.post("/v1/comparisons", json=BODY).status_code == 401
+    headers = {"Authorization": "Bearer secret"}
+    job_id = client.post("/v1/comparisons", json={**BODY, "goal": "wait"}, headers=headers).json()["id"]
+    assert client.post("/v1/comparisons", json=BODY, headers=headers).status_code == 409
+    assert client.get("/v1/comparisons/" + job_id).status_code == 401
+    assert client.delete("/v1/comparisons/" + job_id, headers=headers).status_code == 409
+    assert client.post("/v1/comparisons/" + job_id + "/cancel", headers=headers).status_code == 200
+    for _ in range(150):
+        comparison = client.get("/v1/comparisons/" + job_id, headers=headers).json()
+        if all(comparison[side]["status"] == "cancelled" for side in ("jev", "llm")):
+            break
+        time.sleep(.02)
+    assert comparison["jev"]["status"] == comparison["llm"]["status"] == "cancelled"
+
+
+def test_function_source_is_allowlisted_and_authenticated(client, monkeypatch):
+    assert client.get("/demo/flow.js").status_code == 200
+    assert client.get("/demo/flow.css").status_code == 200
+    assert client.get("/v1/demo/source/jev_choose").json()["code"].startswith("def choose(")
+    assert client.get("/v1/demo/source/.env").status_code == 404
+    monkeypatch.setenv("JEV_API_TOKEN", "secret")
+    assert client.get("/v1/demo/source/jev_choose").status_code == 401

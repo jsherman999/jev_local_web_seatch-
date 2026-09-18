@@ -311,6 +311,267 @@
           }
         }
       }
+    },
+    "/v1/demo/source/{key}": {
+      "get": {
+        "tags": [
+          "Demo"
+        ],
+        "summary": "Source",
+        "operationId": "source_v1_demo_source__key__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/demo/models": {
+      "post": {
+        "tags": [
+          "Demo"
+        ],
+        "summary": "Models",
+        "operationId": "models_v1_demo_models_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/comparisons": {
+      "post": {
+        "tags": [
+          "Demo"
+        ],
+        "summary": "Start",
+        "operationId": "start_v1_comparisons_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComparisonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/comparisons/{job_id}": {
+      "get": {
+        "tags": [
+          "Demo"
+        ],
+        "summary": "Get",
+        "operationId": "get_v1_comparisons__job_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Demo"
+        ],
+        "summary": "Delete",
+        "operationId": "delete_v1_comparisons__job_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/comparisons/{job_id}/cancel": {
+      "post": {
+        "tags": [
+          "Demo"
+        ],
+        "summary": "Cancel",
+        "operationId": "cancel_v1_comparisons__job_id__cancel_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -363,6 +624,11 @@
             },
             "type": "array",
             "title": "Actions"
+          },
+          "usage": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Usage"
           }
         },
         "type": "object",
@@ -377,6 +643,115 @@
           "actions"
         ],
         "title": "BrowserResult"
+      },
+      "CatalogRequest": {
+        "properties": {
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "openai",
+                  "deepseek",
+                  "groq",
+                  "openrouter",
+                  "google",
+                  "anthropic"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CatalogRequest"
+      },
+      "ComparisonRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 2083,
+            "minLength": 1,
+            "format": "uri",
+            "title": "Url",
+            "description": "Starting HTTP(S) URL. No file or javascript URLs."
+          },
+          "goal": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Goal",
+            "description": "One natural-language browser task."
+          },
+          "max_steps": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Steps",
+            "default": 25
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 5.0,
+            "title": "Timeout Seconds",
+            "description": "Execution limit, excluding queue time.",
+            "default": 120
+          },
+          "max_text_chars": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 100.0,
+            "title": "Max Text Chars",
+            "default": 30000
+          },
+          "capture_screenshots": {
+            "type": "boolean",
+            "title": "Capture Screenshots",
+            "description": "Capture browser previews after decisions.",
+            "default": false
+          },
+          "isolate_browser": {
+            "type": "boolean",
+            "title": "Isolate Browser",
+            "description": "Use a fresh browser context for this job.",
+            "default": false
+          },
+          "verify": {
+            "$ref": "#/components/schemas/Verification"
+          },
+          "llm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LLMChoice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseline_rates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Rates"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "url",
+          "goal"
+        ],
+        "title": "ComparisonRequest"
       },
       "HTTPValidationError": {
         "properties": {
@@ -498,6 +873,18 @@
             "title": "Max Text Chars",
             "default": 30000
           },
+          "capture_screenshots": {
+            "type": "boolean",
+            "title": "Capture Screenshots",
+            "description": "Capture browser previews after decisions.",
+            "default": false
+          },
+          "isolate_browser": {
+            "type": "boolean",
+            "title": "Isolate Browser",
+            "description": "Use a fresh browser context for this job.",
+            "default": false
+          },
           "verify": {
             "$ref": "#/components/schemas/Verification"
           }
@@ -509,6 +896,39 @@
           "goal"
         ],
         "title": "JobRequest"
+      },
+      "LLMChoice": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openai",
+              "deepseek",
+              "groq",
+              "openrouter",
+              "google",
+              "anthropic"
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[\\w./:+-]+$",
+            "title": "Model"
+          },
+          "rates": {
+            "$ref": "#/components/schemas/Rates"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "model"
+        ],
+        "title": "LLMChoice"
       },
       "PageResult": {
         "properties": {
@@ -555,6 +975,49 @@
           "captured_at"
         ],
         "title": "PageResult"
+      },
+      "Rates": {
+        "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input"
+          },
+          "cached": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Rates"
       },
       "SourceLink": {
         "properties": {

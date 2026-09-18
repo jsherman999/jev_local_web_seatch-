@@ -3,6 +3,7 @@ import fcntl
 import json
 import sqlite3
 import sys
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -34,6 +35,7 @@ class JobManager:
         self.process = None
         self.active_id = None
         self.cancel_event = asyncio.Event()
+        self.ephemeral = {}
 
     def save(self, job):
         job["updated_at"] = now()
@@ -62,14 +64,17 @@ class JobManager:
                 self.save(job)
         self.runner = asyncio.create_task(self.loop())
 
-    def submit(self, request):
+    def submit(self, request, *, runtime=None, metadata=None):
         active = self.db.execute(
             "SELECT count(*) FROM jobs WHERE json_extract(body,'$.status') IN ('queued','running')"
         ).fetchone()[0]
         if active >= 100:
             raise OverflowError("Queue capacity of 100 jobs reached")
         job = Job(id=str(uuid.uuid4()), status="queued", created_at=now(), updated_at=now(), request=request)
+        job.progress.update(metadata or {})
         saved = self.save(job.model_dump(mode="json"))
+        if runtime:
+            self.ephemeral[job.id] = runtime
         self.queue.put_nowait(saved["id"])
         return saved
 
@@ -82,6 +87,7 @@ class JobManager:
             self.cancel_event.set()
             job["progress"]["cancellation_requested"] = True
         else:
+            self.ephemeral.pop(job_id, None)
             job.update(status="cancelled", error="Cancelled before execution")
         return self.save(job)
 
@@ -98,6 +104,7 @@ class JobManager:
                 await self.process.wait()
 
     async def execute(self, job):
+        runtime = self.ephemeral.pop(job['id'], None)
         self.process = await asyncio.create_subprocess_exec(
             *self.command,
             cwd=ROOT,
@@ -106,17 +113,30 @@ class JobManager:
             stderr=asyncio.subprocess.DEVNULL,
             limit=2_000_000,
         )
-        self.process.stdin.write((json.dumps(job["request"]) + "\n").encode())
+        payload = {**job['request']}
+        if runtime:
+            payload['_llm'] = runtime
+        self.process.stdin.write((json.dumps(payload) + "\n").encode())
         await self.process.stdin.drain()
         self.process.stdin.close()
         result = None
         while line := await self.process.stdout.readline():
+            if runtime:
+                line = line.replace(runtime['key'].encode(), b'[redacted]')
             try:
                 event = json.loads(line)
             except (ValueError, UnicodeDecodeError):
                 continue
             if event.get("event") == "progress":
-                job["progress"] = {k: v for k, v in event.items() if k != "event"}
+                job["progress"].update({k: v for k, v in event.items() if k != "event"})
+                self.save(job)
+            elif event.get("event") == "trace":
+                trace = job["progress"].setdefault("trace", [])
+                trace.append({k: v for k, v in event.items() if k != "event"})
+                # Public decision budget bounds normal runs well below this cap.
+                if len(trace) > 1200:
+                    del trace[:-1200]
+                    job["progress"]["trace_truncated"] = True
                 self.save(job)
             elif event.get("event") == "result":
                 result = event
@@ -135,6 +155,8 @@ class JobManager:
             self.active_id = job_id
             self.cancel_event.clear()
             job["status"] = "running"
+            started = time.monotonic()
+            job["progress"]["started_at"] = now()
             self.save(job)
             execution = asyncio.create_task(self.execute(job))
             cancellation = asyncio.create_task(self.cancel_event.wait())
@@ -176,14 +198,17 @@ class JobManager:
                 execution.cancel()
                 cancellation.cancel()
                 await asyncio.gather(execution, cancellation, return_exceptions=True)
+                job["progress"]["execution_ms"] = round((time.monotonic() - started) * 1000)
                 self.save(job)
                 self.active_id = None
                 self.process = None
+                self.ephemeral.pop(job_id, None)
                 self.queue.task_done()
 
     async def close(self):
         if self.runner:
             self.runner.cancel()
             await asyncio.gather(self.runner, return_exceptions=True)
+        self.ephemeral.clear()
         self.db.close()
         self.lock.close()

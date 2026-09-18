@@ -1,5 +1,6 @@
 import os
 import secrets
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import DATA, ROOT, missing_keys
+from .demo import routes
 from .jobs import JobManager
 from .models import TERMINAL, Job, JobRequest
 
@@ -31,7 +33,14 @@ def create_app(data: Path = DATA, command=None):
         manager.start()
         app.state.jobs = manager
         try:
-            yield
+            baseline = JobManager(data / "baseline", command or
+                                  [sys.executable, "-m", "jev_service.worker", "--baseline"])
+            app.state.baseline = baseline
+            baseline.start()
+            try:
+                yield
+            finally:
+                await baseline.close()
         finally:
             await manager.close()
 
@@ -153,6 +162,7 @@ def create_app(data: Path = DATA, command=None):
         app.state.jobs.db.commit()
         return Response(status_code=204)
 
+    app.include_router(routes(authenticate))
     return app
 
 

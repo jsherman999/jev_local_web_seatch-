@@ -8,6 +8,93 @@ Browser automation shared by apps on this Mac and its local network.
 - **OpenAPI:** http://127.0.0.1:8776/openapi.json
 - **Agent integration guide:** [docs/INTEGRATION.md](docs/INTEGRATION.md), also served at `/integration.md`
 - **Readiness:** http://127.0.0.1:8776/ready
+- **Side-by-side demo:** http://127.0.0.1:8776/demo
+
+## Browser comparison demo
+
+Enter an **LLM API key** to choose the regular browser's provider and model. Recognizable
+prefixes select OpenAI, Anthropic, Google, Groq, or OpenRouter automatically. Shared
+formats (including generic `sk-` keys used by DeepSeek and older OpenAI keys) require a
+provider choice; keys are never tried against multiple providers. The provider's live
+catalog populates the dropdown, with known non-chat models visible but disabled.
+Model listings do not guarantee account access or compatibility with JSON browser actions.
+Leave the key blank to use the configured service default.
+
+Entered keys are held only in tab/service/worker memory and passed through a private
+worker pipe. They are not stored in browser storage, SQLite, traces, or configuration.
+The backend is required: calls do not go directly from a GitHub Pages frontend.
+The selected model affects only the regular LLM lane; Jev's text helper stays configured
+separately. Model ID, provider, and rate estimates are saved with the comparison.
+
+After both runs end, the cost card shows the more expensive lane, a ratio such as
+**DeepSeek 15× Jev**, and the dollar difference. Jev's total includes its helper.
+Unknown model rates must be entered under **Run settings & pricing** before running;
+provider-reported cost takes precedence. Missing usage disables the ratio, and zero-cost
+runs show a dollar comparison instead of dividing by zero. Spend is not an outcome ranking.
+
+Open `/demo`, enter a URL and task, then select **Start comparison**. The left pane
+uses the configured text LLM as a conventional JSON action agent; the right uses
+the Jev service. **Try the practice task** loads a local product-search exercise.
+Both run concurrently in fresh Chrome contexts with the same DOM observations,
+supported controls, viewport, decision budget, and timeout. The baseline generates
+its action and any field text together; Jev uses TypeSafe decisions plus its text helper.
+The panes are real, read-only browser screenshots updated after each decision,
+not interactive embedded websites or continuous video.
+
+Each pane shows execution time, provider-reported input/output tokens, estimated
+total API cost, an action log, and final page text. Timing includes process startup,
+browser work, screenshot capture, model calls, and cleanup, but excludes queue time.
+The agents run concurrently on shared hardware; this is a demo, not a controlled benchmark.
+An optional final-text check helps compare outcomes; it does not verify every semantic
+requirement. No overall winner is inferred from tokens alone.
+Editing the practice task's URL or goal clears its preset success phrase; manually
+entered verification text remains under your control.
+
+Both agents share a dropdown compatibility adapter. It supports native selects
+covered by their own visible, aria-hidden decoration (such as Amazon's sort control),
+while retaining freshness, visibility, enabled-option, and unrelated-overlay checks.
+Dropdown diagnostics record the precise failed check in `progress.browser_diagnostic`.
+
+Expand **Run settings & pricing** to adjust limits and USD-per-million token rates.
+Default estimates use [GPT-5.4 pricing](https://developers.openai.com/api/docs/models/gpt-5.4)
+($2.50 input, $0.25 cached input, $15 output) only for the matching direct OpenAI
+configuration, and [Jev 1.13 pricing](https://docs.typesafe.ai/models)
+($0.042 input, free output), checked September 18, 2026. Jev's alias can change;
+confirm your account/model rates. Provider-reported cost takes precedence. Jev's
+total includes text-helper calls. Missing usage or prices are shown as unavailable,
+and in-flight/failed requests can incur charges not yet reported. Rates cover standard
+short-context API calls; taxes, custom discounts, and local compute are excluded.
+
+**Stop both** cancels the workers; refreshing restores the last comparison in that
+tab. The optional service token is entered in settings and is never saved. Job
+data and final screenshots persist locally; `DELETE /v1/comparisons/{id}` deletes
+both finished jobs. The demo refuses to start while either queue is busy. The normal
+Jev queue still runs one job at a time; a separate baseline worker runs alongside it.
+The demo shares the existing service's host/origin/authentication protections.
+
+### Live execution diagrams
+
+The **Under the hood** panels highlight actual worker calls: browser setup, DOM
+observation, Jev/LLM API requests, output routing, the optional Jev text helper,
+browser execution, final checks, and result delivery. Select a box for a plain-language
+explanation and **View actual function** for its source. Only an explicit allowlist of
+function definitions is served, with the same optional bearer authentication as jobs;
+the source endpoint cannot read arbitrary files or runtime credentials.
+
+After a run, **Replay**, the event buttons, and the slider inspect the recorded trace.
+Replay deliberately displays one event every 0.5 seconds and keeps original timestamps;
+it does not rerun jobs, spend model credits, or replay historical browser screenshots.
+Live polling may miss a brief highlight, but the trace retains the event for inspection.
+Old jobs created before tracing show an explicit unavailable message. Stopped jobs do
+not leave a model falsely marked as still running. Trace events record function identifiers,
+timestamps, operation/target IDs, model IDs, and small counts—not request bodies,
+typed field values, credentials, or hidden reasoning. Normal jobs without screenshots
+do not emit traces. At most 1,200 events are retained per job, with truncation flagged.
+
+The flow explains this application's implementation and observable API calls. It does
+not claim to expose hosted model internals. Jev evaluates typed questions in one request;
+the baseline generates action JSON and field text. Browser timings include the additional
+instrumentation and should not be treated as a general provider benchmark.
 
 Submit a URL and goal to `POST /v1/jobs`, poll by ID, then pass the returned page text and
 source links to your application's analysis LLM. Supports persistent jobs, cancellation,
