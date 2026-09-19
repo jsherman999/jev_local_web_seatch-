@@ -28,3 +28,15 @@ assert.equal(compare({complete: true, cost: 1}, {complete: true, cost: 0}).title
 const isolated = vm.runInContext(`groupCost(${JSON.stringify(text)}, {progress: {model_config: {rates: {input: 1, cached: .1, output: 2}}}})`, context);
 assert.equal(isolated.value, .00104);
 console.log('Cost comparison and independent model pricing: 6 checks passed');
+
+vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../jev_service/static/batch.js'), 'utf8').split('window.JevBatch =')[0], context);
+const bm = (row, batch) => vm.runInContext(`batchMetrics(${JSON.stringify(row)}, ${JSON.stringify(batch)})`, context);
+const snapshot = {helper_rates: {input: 2, cached: 1, output: 3}, jev_rates: {input: .1, output: 0}};
+const usage = {calls: 1, groups: [{...text, cached_tokens: 0}]};
+assert.equal(bm({status: 'pending'}, snapshot).complete, false);
+assert.equal(bm({status: 'running', usage}, snapshot).seconds, null);
+assert.equal(bm({kind: 'jev', status: 'completed', execution_ms: 1250, usage}, snapshot).cost, .0026);
+assert.equal(bm({kind: 'llm', status: 'completed', execution_ms: 1250, usage, rates: {input: 1, output: 1}}, snapshot).cost, .0012);
+assert.equal(bm({kind: 'llm', status: 'completed', usage, rates: {}}, snapshot).complete, false);
+assert.equal(bm({kind: 'llm', status: 'failed', execution_ms: 1500, usage, rates: {input: 1, output: 1}}, snapshot).seconds, 1.5);
+console.log('Batch charts: 6 checks passed');

@@ -184,3 +184,26 @@ guide for lifecycle semantics, limits, and deployment assumptions.
 
 Sources: [Jev upstream](https://github.com/browser-use/jev-ultrafast),
 [OpenAI Chat Completions reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
+
+### Compare up to ten models
+
+Load a provider's models using your API key, open **Compare models**, and select
+1–10 distinct models from that provider. The searchable picker includes optional
+input, cached-input, and output rates for each selected model. Enter the URL, goal,
+and optional final-text check once, then choose **Run selected models + Jev**.
+
+Jev runs once, followed by each selected model once in selection order. All runs
+use fresh headless browser contexts and identical limits. Other service jobs are
+rejected while a batch runs to avoid overlapping browser work. Batch mode omits
+screenshots and live function traces for every participant; the original two-pane
+comparison remains available separately.
+
+Progress, cancellation, cost/time bar charts, and a results table appear below the
+form. Jev is highlighted; failed attempts are striped and never presented as successful
+wins. Unknown costs remain unavailable. Jev cost includes its text helper, and rate
+estimates are captured at submission. A single run is illustrative, not a statistically
+reliable benchmark. Site changes, provider load, and cache effects can affect results.
+
+Reloading the tab restores the last batch. Completed results persist locally. A
+cancel stops the active run and skips remaining models. A service restart interrupts
+unfinished work without replaying it; entered keys are never persisted.

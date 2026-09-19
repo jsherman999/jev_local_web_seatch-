@@ -14,9 +14,9 @@ function rate(name) {
 function groupCost(group, job = null) {
   if (group.cost_complete) return {value: group.reported_cost_usd, estimated: false};
   if (!group.tokens_complete) return {value: null, estimated: false};
-  const provider = group.provider, prices = job?.progress.model_config?.rates;
-  const input = prices && provider === 'text' ? prices.input ?? null : rate(provider + '_input');
-  const output = prices && provider === 'text' ? prices.output ?? null : rate(provider + '_output');
+  const provider = group.provider, prices = job?.progress.rate_snapshot?.[provider] || job?.progress.model_config?.rates;
+  const input = prices ? prices.input ?? null : rate(provider + '_input');
+  const output = prices ? prices.output ?? null : rate(provider + '_output');
   const cached = provider === 'text' ? (prices ? prices.cached ?? null : rate('text_cached')) : input;
   if (input === null || output === null || (group.cached_tokens && cached === null)) return {value: null, estimated: true};
   return {value: ((group.input_tokens - group.cached_tokens) * input + group.cached_tokens * (cached ?? input) + group.output_tokens * output) / 1e6, estimated: true};
@@ -91,6 +91,7 @@ function costComparison(a, b, label) {
     detail: `${expensive} cost ${prefix}${money(high - low)} more (${money(high)} vs ${money(low)}).${low === 0 ? ' A ratio is undefined when one cost is zero.' : ''} Jev includes its text helper. This compares API spend, not outcome quality.`};
 }
 function render() {
+  if (window.JevBatch?.active()) return;
   if (!comparison?.llm) return;
   for (const side of ['llm', 'jev']) renderLane(side, comparison[side]);
   busy = !['llm', 'jev'].every(side => terminal.has(comparison[side].status));
@@ -158,6 +159,7 @@ function setLLMRates(prices = {}) {
 }
 function resetCatalog() {
   catalogVersion++; loadedCatalog = null; clearTimeout(modelTimer);
+  window.JevBatch?.setCatalog(null);
   $('#llm-model').replaceChildren(new Option($('#llm-key').value.trim() ? 'Load models to choose' : `Service default · ${config.text_model || ''}`, ''));
   $('#llm-model').disabled = true;
   setLLMRates($('#llm-key').value.trim() ? {} : config.default_llm?.rates);
@@ -173,6 +175,7 @@ async function loadModels() {
     const result = await api('/v1/demo/models', {method: 'POST', headers: {'X-LLM-API-Key': key}, body: JSON.stringify({provider: provider || null})});
     if (version !== catalogVersion) return;
     loadedCatalog = result; $('#llm-provider').value = result.provider;
+    window.JevBatch?.setCatalog(result);
     $('#llm-model').replaceChildren(new Option('Choose a model', ''));
     for (const model of result.models) {
       const option = new Option(model.id + (model.supported ? '' : ' · not a text chat model'), model.id);
@@ -212,6 +215,8 @@ $('#run-form').addEventListener('submit', async event => {
       llm, baseline_rates: prices, url: parsed.href, goal: $('#goal').value, max_steps: Number($('#steps').value),
       timeout_seconds: Number($('#timeout').value), verify: {text_contains: $('#verify').value.trim() ? [$('#verify').value.trim()] : []},
     })});
+    sessionStorage.removeItem('jev-batch');
+    window.JevBatch?.showSingle();
     sessionStorage.setItem('jev-comparison', comparison.id);
     for (const side of ['llm', 'jev']) { $('.screen', $('#' + side)).hidden = true; $('.empty', $('#' + side)).hidden = false; }
     render(); await poll();
@@ -253,6 +258,7 @@ async function init() {
     resetCatalog();
     for (const [key, value] of Object.entries(config.rates)) $('#' + key).value = value;
     if (!ready.ready) message('The browser or model credentials are unavailable. Check service readiness in API docs.');
+    if (sessionStorage.getItem('jev-batch')) { await window.JevBatch.restore(); return; }
     const saved = sessionStorage.getItem('jev-comparison');
     if (saved) { comparison = {id: saved}; busy = true; restoring = true; $('#start').disabled = true; await poll(); }
   } catch { message('Could not connect to the service. Reload the page to try again.'); }

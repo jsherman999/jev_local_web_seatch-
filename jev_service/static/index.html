@@ -6,7 +6,7 @@
   <meta name="description" content="Watch a regular LLM and Jev complete the same browser task side by side.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23162425'/%3E%3Cpath d='M8 8h6v16H8zm10 0h6v16h-6z' fill='%23c5f16b'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/demo/style.css"><link rel="stylesheet" href="/demo/flow.css">
-  <script src="/demo/flow.js" defer></script><script src="/demo/app.js" defer></script>
+  <script src="/demo/flow.js" defer></script><script src="/demo/app.js" defer></script><script src="/demo/batch.js" defer></script>
 </head>
 <body>
 <main>
@@ -21,6 +21,15 @@
       <button id="load-models" type="button" class="secondary">Load models</button>
     </div>
     <p id="model-message" class="hint" role="status">Keys stay in memory in this tab and the local service, and are sent only to the selected provider. They are never saved. Jev keeps its own configuration.</p>
+    <details id="batch-picker" class="batch-picker">
+      <summary id="batch-choice-count">Compare models · 0 / 10 selected</summary>
+      <p class="hint">Load a provider’s models above, then choose up to 10. Runs Jev once, then each selected model once, sequentially in fresh headless sessions. Uses API credits for every run.</p>
+      <label>Find models<input id="batch-search" type="search" placeholder="Filter the provider’s models"></label>
+      <div id="batch-models" class="batch-models">Enter a key and load models first.</div>
+      <p class="hint">Optional prices: USD per million input / cached input / output tokens. Blank means unknown. Jev’s rates come from Run settings & pricing.</p>
+      <button id="batch-start" type="button" class="primary">Run selected models + Jev</button>
+      <p id="batch-picker-message" class="hint" role="status"></p>
+    </details>
     <div class="form-footer"><button type="button" id="sample" class="text-button">↗ Try the practice task</button><span class="hint">Runs both models · uses API credits</span><button id="stop" type="button" class="secondary" disabled>Stop both</button><button id="start" class="primary" type="submit">Start comparison <span>↗</span></button></div>
     <details class="settings"><summary>Run settings & pricing</summary>
       <div class="settings-grid"><label>Max decisions per agent<input id="steps" type="number" min="1" max="50" value="15" required></label><label>Timeout per agent (seconds)<input id="timeout" type="number" min="5" max="600" value="120" required></label><label>Verify final text (optional)<input id="verify" placeholder="A phrase both final pages must contain" maxlength="500"></label><label id="token-label" hidden>Service access token<input id="token" type="password" autocomplete="off" placeholder="Only if configured; never saved"></label></div>
@@ -31,6 +40,13 @@
     </details>
   </form>
   <p id="message" role="status" aria-live="polite"></p>
+  <section id="batch-results" class="batch-results" hidden>
+    <div class="batch-heading"><h2>model comparison</h2><button id="batch-cancel" type="button" class="secondary">Stop comparison</button></div>
+    <p id="batch-progress" role="status" aria-live="polite"></p>
+    <p class="hint">One run each · Jev first, then models in selection order · lower bars mean less spend or elapsed time, not better results. Failed runs are striped. “Completed” is an agent claim unless a check passed.</p>
+    <div class="batch-charts"><section aria-label="API cost bar chart"><h3>Total API cost · USD</h3><div id="batch-cost-chart"></div></section><section aria-label="Elapsed time bar chart"><h3>Elapsed time · seconds</h3><div id="batch-time-chart"></div></section></div>
+    <div class="batch-table-wrap"><table><caption>Run results, including Jev’s text helper cost. Timing excludes queue time.</caption><thead><tr><th>Model</th><th>Outcome</th><th>Seconds</th><th>Tokens</th><th>API cost</th><th>Cost / Jev</th></tr></thead><tbody id="batch-table"></tbody></table></div>
+  </section>
   <section class="how-it-works">
     <div><h2>See the moving parts.</h2><p>Follow the real function calls, then replay them one event at a time. Select any box to inspect its purpose and source code.</p></div>
     <label class="flow-toggle"><input id="show-flow" type="checkbox" checked> Show live diagrams</label>

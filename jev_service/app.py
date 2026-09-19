@@ -10,6 +10,7 @@ from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from .batches import BatchManager
 from .config import DATA, ROOT, missing_keys
 from .demo import routes
 from .jobs import JobManager
@@ -37,9 +38,11 @@ def create_app(data: Path = DATA, command=None):
                                   [sys.executable, "-m", "jev_service.worker", "--baseline"])
             app.state.baseline = baseline
             baseline.start()
+            app.state.batches = BatchManager(manager, baseline)
             try:
                 yield
             finally:
+                await app.state.batches.close()
                 await baseline.close()
         finally:
             await manager.close()
@@ -113,6 +116,8 @@ def create_app(data: Path = DATA, command=None):
     )
     async def submit(body: JobRequest, response: Response):
         """Queue one goal. Model calls are billable. Do not retry ambiguous submissions blindly."""
+        if app.state.batches.active_id:
+            raise HTTPException(409, 'A sequential model comparison is running')
         if missing_keys():
             raise HTTPException(
                 503,

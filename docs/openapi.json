@@ -312,6 +312,140 @@
         }
       }
     },
+    "/v1/batches": {
+      "post": {
+        "tags": [
+          "Demo"
+        ],
+        "summary": "Start Batch",
+        "operationId": "start_batch_v1_batches_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/batches/{batch_id}": {
+      "get": {
+        "tags": [
+          "Demo"
+        ],
+        "summary": "Get Batch",
+        "operationId": "get_batch_v1_batches__batch_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/batches/{batch_id}/cancel": {
+      "post": {
+        "tags": [
+          "Demo"
+        ],
+        "summary": "Cancel Batch",
+        "operationId": "cancel_batch_v1_batches__batch_id__cancel_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/demo/source/{key}": {
       "get": {
         "tags": [
@@ -576,6 +710,85 @@
   },
   "components": {
     "schemas": {
+      "BatchRequest": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 2083,
+            "minLength": 1,
+            "format": "uri",
+            "title": "Url",
+            "description": "Starting HTTP(S) URL. No file or javascript URLs."
+          },
+          "goal": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Goal",
+            "description": "One natural-language browser task."
+          },
+          "max_steps": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Steps",
+            "default": 25
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "maximum": 600.0,
+            "minimum": 5.0,
+            "title": "Timeout Seconds",
+            "description": "Execution limit, excluding queue time.",
+            "default": 120
+          },
+          "max_text_chars": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 100.0,
+            "title": "Max Text Chars",
+            "default": 30000
+          },
+          "capture_screenshots": {
+            "type": "boolean",
+            "title": "Capture Screenshots",
+            "description": "Capture browser previews after decisions.",
+            "default": false
+          },
+          "isolate_browser": {
+            "type": "boolean",
+            "title": "Isolate Browser",
+            "description": "Use a fresh browser context for this job.",
+            "default": false
+          },
+          "verify": {
+            "$ref": "#/components/schemas/Verification"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/LLMChoice"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Models"
+          },
+          "helper_rates": {
+            "$ref": "#/components/schemas/Rates"
+          },
+          "jev_rates": {
+            "$ref": "#/components/schemas/Rates"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "url",
+          "goal",
+          "models"
+        ],
+        "title": "BatchRequest"
+      },
       "BrowserResult": {
         "properties": {
           "agent_status": {

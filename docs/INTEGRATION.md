@@ -197,3 +197,30 @@ Model/key changes require editing `.env` and restarting. Never include `.env` in
 Runnable clients: `examples/client.py` and `examples/client.mjs`.
 
 LAN configuration: `JEV_HOST=0.0.0.0`; set `JEV_ALLOWED_HOSTS` to the Mac address/hostname plus localhost. If DHCP changes the IP, update that setting and restart, or use `jmini.local`. Chrome debugging remains loopback-only.
+
+## Sequential model comparisons
+
+`POST /v1/batches` accepts the usual JobRequest fields plus:
+
+- `models`: 1–10 distinct `{provider, model, rates: {input, cached, output}}` entries,
+  all from one provider, validated against its live catalog.
+- `helper_rates` and `jev_rates`: optional `{input, cached, output}` prices in USD per
+  million tokens. Unknown prices should be null, never assumed zero.
+- `X-LLM-API-Key`: the selected provider's credential, kept only in memory.
+
+The response is a batch with `id`, `status`, `request`, captured rates, and `runs`.
+Poll `GET /v1/batches/{id}`. `POST /v1/batches/{id}/cancel` stops the current job and
+marks remaining runs `not_run`. The existing bearer authentication and origin checks
+apply to all batch endpoints.
+
+Jev runs first, then each selected model, once each. Browser contexts are isolated;
+all runs disable screenshot/trace capture and share the same task limits. Both job
+queues are reserved for the batch; competing submissions receive 409. Per-run records
+include job ID, status, verification, duration, usage, steps, final URL, and error.
+Full worker results remain in the existing job databases. Batch summaries persist in
+the `batches` table in the main job database, without credentials.
+
+Batch `completed` means all scheduled attempts ended, not that every task succeeded.
+Check each run's `status` and `verification`. Failed/cancelled runs may contain only
+partial usage. Elapsed times include worker startup and cleanup but not queue waiting.
+Service shutdown/restart marks the batch interrupted; unfinished work is never replayed.

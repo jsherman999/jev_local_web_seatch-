@@ -5,6 +5,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
+from .batches import BatchRequest
 from .config import ROOT, missing_keys
 from .models import TERMINAL, JobRequest
 from .providers import PROVIDERS, CatalogRequest, ComparisonRequest, catalog, default_llm
@@ -35,6 +36,30 @@ def routes(authenticate):
     @router.get("/demo/flow.css", include_in_schema=False)
     async def flow_style():
         return FileResponse(STATIC / "flow.css", media_type="text/css")
+
+    @router.get('/demo/batch.js', include_in_schema=False)
+    async def batch_script():
+        return FileResponse(STATIC / 'batch.js', media_type='text/javascript')
+
+    @router.post('/v1/batches', status_code=202, dependencies=[Depends(authenticate)], tags=['Demo'])
+    async def start_batch(body: BatchRequest, request: Request):
+        if missing_keys():
+            raise HTTPException(503, 'Configure the Jev and text-helper credentials first')
+        request.app.state.batches.require_idle()
+        key = request.headers.get('x-llm-api-key', '')
+        listing = await catalog(key, body.models[0].provider)
+        available = {m['id'] for m in listing['models'] if m['supported']}
+        if any(m.model not in available for m in body.models):
+            raise HTTPException(400, 'Choose available text chat models from the provider catalog')
+        return request.app.state.batches.start(body, key)
+
+    @router.get('/v1/batches/{batch_id}', dependencies=[Depends(authenticate)], tags=['Demo'])
+    async def get_batch(batch_id: str, request: Request):
+        return request.app.state.batches.get(batch_id)
+
+    @router.post('/v1/batches/{batch_id}/cancel', dependencies=[Depends(authenticate)], tags=['Demo'])
+    async def cancel_batch(batch_id: str, request: Request):
+        return request.app.state.batches.cancel(batch_id)
 
     @router.get("/v1/demo/source/{key}", dependencies=[Depends(authenticate)], tags=["Demo"])
     async def source(key: str):
@@ -72,6 +97,7 @@ def routes(authenticate):
 
     @router.post("/v1/comparisons", status_code=202, dependencies=[Depends(authenticate)], tags=["Demo"])
     async def start(body: ComparisonRequest, request: Request):
+        request.app.state.batches.require_idle()
         if missing_keys():
             raise HTTPException(503, "Configure the model credentials before running a comparison")
         managers = (request.app.state.jobs, request.app.state.baseline)
@@ -94,6 +120,7 @@ def routes(authenticate):
         elif request.headers.get('x-llm-api-key'):
             raise HTTPException(400, 'Choose a provider and model for this API key.')
         # Discovery awaits the network; recheck queues before the atomic submission.
+        request.app.state.batches.require_idle()
         if any(m.db.execute("SELECT count(*) FROM jobs WHERE json_extract(body,'$.status') "
                             "IN ('queued','running')").fetchone()[0] for m in managers):
             raise HTTPException(409, 'Wait for the current jobs to finish before comparing')
