@@ -17,7 +17,7 @@ BODY = {"url": "https://example.com", "goal": "read"}
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("JEV_ALLOWED_HOSTS", "testserver,localhost,127.0.0.1,192.168.4.27,jmini.local")
+    monkeypatch.setenv("JEV_ALLOWED_HOSTS", "testserver,localhost,127.0.0.1,192.168.4.27")
     monkeypatch.setenv("TYPESAFE_API_KEY", "test-key")
     monkeypatch.setenv("TEXT_MODEL_API_KEY", "test-key")
     monkeypatch.delenv("JEV_API_TOKEN", raising=False)
@@ -154,8 +154,8 @@ def test_listing_stays_in_submission_order(tmp_path):
     asyncio.run(scenario())
 
 
-def test_lan_docs_and_swagger_origin(client):
-    for host in ["192.168.4.27:8776", "jmini.local:8776"]:
+def test_lan_and_localhost_docs_and_swagger_origin(client):
+    for host in ["192.168.4.27:8776", "localhost:8776"]:
         headers = {"Host": host, "Origin": "http://" + host}
         assert client.get("/docs", headers=headers).status_code == 200
         assert client.get("/openapi.json", headers=headers).status_code == 200

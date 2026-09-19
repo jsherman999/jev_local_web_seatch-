@@ -2,7 +2,34 @@ import json
 
 import pytest
 
-from jev_service.baseline import install, parse_action
+from jev_service.baseline import install, parse_action, response_options
+
+
+@pytest.mark.parametrize('model_id', ['anthropic/claude-haiku-4.5', '~anthropic/claude-haiku-latest'])
+def test_haiku_uses_strict_schema_and_supporting_route(policy, monkeypatch, model_id):
+    from jev_ultrafast import model
+
+    agent, _ = policy
+    monkeypatch.setenv('TEXT_MODEL_BASE_URL', 'https://openrouter.ai/api/v1')
+    monkeypatch.setenv('TEXT_MODEL', model_id)
+    def post(url, key, body):
+        assert body['model'] == model_id
+        assert body['provider'] == {'require_parameters': True}
+        schema = body['response_format']['json_schema']
+        assert schema['strict'] is True
+        assert schema['schema']['additionalProperties'] is False
+        assert set(schema['schema']['required']) == {'operation', 'target', 'text'}
+        assert 'TYPE_TEXT' in schema['schema']['properties']['operation']['enum']
+        # Even a schema-valid provider response cannot target unobserved nodes.
+        return completion('{"operation":"TYPE_TEXT","target":"999","text":"laptop"}')
+    monkeypatch.setattr(model, 'post_json', post)
+    with pytest.raises(ValueError, match='unobserved target'):
+        agent.choose(PAGE, 'Search laptop', [])
+
+
+def test_other_models_keep_existing_response_contract():
+    assert response_options('https://openrouter.ai/api/v1', 'deepseek/deepseek-v4.1-flash', []) == {
+        'response_format': {'type': 'json_object'}}
 
 
 def completion(content, reason='stop', **message):

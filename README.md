@@ -2,7 +2,7 @@
 
 Browser automation shared by apps on this Mac and its local network.
 
-**LAN Swagger:** http://192.168.4.27:8776/docs (also http://jmini.local:8776/docs).
+**Local Swagger:** http://localhost:8776/docs.
 
 - **Swagger:** http://127.0.0.1:8776/docs
 - **OpenAPI:** http://127.0.0.1:8776/openapi.json
@@ -27,6 +27,9 @@ is executed or automatically retried. Safe response
 diagnostics retain the finish reason and presence of content, not model text or reasoning.
 OpenRouter errors include a bounded, credential-redacted provider explanation when
 available. Token budgets and account data-policy settings are not changed automatically.
+OpenRouter Haiku 4.5 and `~anthropic/claude-haiku-latest` use a strict action JSON
+schema and require a supporting provider endpoint. Observed-target and browser
+freshness checks still run locally; the alias is passed through unchanged.
 Leave the key blank to use the configured service default.
 
 Entered keys are held only in tab/service/worker memory and passed through a private

@@ -1,7 +1,7 @@
 # Jev browser service — integration contract
 
 Base URL on this Mac: **http://127.0.0.1:8776**.
-LAN: **http://192.168.4.27:8776** or **http://jmini.local:8776** (where mDNS is supported).
+Local hostname: **http://localhost:8776**. LAN: **http://192.168.4.27:8776**.
 Swagger: `/docs`. OpenAPI schema: `/openapi.json`. This guide: `/integration.md`.
 Project: `/Users/jay/codex_proj/Jev`.
 
@@ -210,7 +210,7 @@ For code changes, run `.venv/bin/python -m pytest` then restart. Use a single AP
 Model/key changes require editing `.env` and restarting. Never include `.env` in a handoff.
 Runnable clients: `examples/client.py` and `examples/client.mjs`.
 
-LAN configuration: `JEV_HOST=0.0.0.0`; set `JEV_ALLOWED_HOSTS` to the Mac address/hostname plus localhost. If DHCP changes the IP, update that setting and restart, or use `jmini.local`. Chrome debugging remains loopback-only.
+LAN configuration: `JEV_HOST=0.0.0.0`; set `JEV_ALLOWED_HOSTS` to the Mac address/hostname plus localhost. If DHCP changes the IP, update that setting and restart. On the Mac itself, use `http://localhost:8776`. Chrome debugging remains loopback-only.
 
 ## Sequential model comparisons
 
