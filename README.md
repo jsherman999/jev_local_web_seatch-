@@ -180,6 +180,7 @@ Chrome uses `127.0.0.1:9276` and `data/chrome`, independent of personal browser 
 
 Development: `.venv/bin/python -m jev_service` (stop the installed API first).
 Tests: `.venv/bin/python -m pytest`; lint: `.venv/bin/ruff check jev_service tests launchd examples`.
+UI accounting and sorting checks: `node tests/demo_metrics.cjs`.
 Tests use fake workers and never call paid APIs. Live example clients do call paid APIs.
 
 ## Dependencies and credentials
@@ -211,7 +212,13 @@ screenshots and live function traces for every participant; the original two-pan
 comparison remains available separately.
 
 Progress, cancellation, cost/time bar charts, and a results table appear below the
-form. Jev is highlighted. Unsuccessful attempts show NA for time, tokens, cost, and
+form. Once the comparison ends, both charts and the table sort by total API cost,
+lowest first. Use **Sort by** to choose total cost, time, or tokens and **Order** to
+choose lowest or highest first; all three views stay aligned. Runs remain in execution
+order while a comparison is active. Each new comparison defaults to lowest total cost.
+Missing or incomplete totals and unsuccessful runs sort last in either direction;
+ties retain execution order. **Cost / Jev** always uses Jev as the reference, regardless
+of its row position. Jev is highlighted. Unsuccessful attempts show NA for time, tokens, cost, and
 cost ratios, with no bar; their error messages remain visible. Unknown costs on successful
 runs remain unavailable. Raw accounting remains in the job API for diagnosis. Jev cost includes its text helper, and rate
 estimates are captured at submission. A single run is illustrative, not a statistically
