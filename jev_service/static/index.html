@@ -10,7 +10,7 @@
 </head>
 <body>
 <main>
-  <header><a class="brand" href="/demo"><span class="brandmark">j.</span> jev <span class="divider">/</span> <span class="muted">the browser lab</span></a><span id="connection" class="connection">Checking service…</span></header>
+  <header><a class="brand" href="/demo"><span class="brandmark">j.</span> jev <span class="powered">powered</span></a><div class="header-actions"><button id="guide-open" type="button" class="secondary" aria-haspopup="dialog">Guide</button><span id="connection" class="connection">Checking service…</span></div></header>
   <section class="intro"><h1>browser race ready go</h1></section>
   <form id="run-form" class="task-form">
     <div class="fields"><label>Starting URL<input id="url" name="url" type="url" placeholder="https://en.wikipedia.org" required maxlength="2048"></label><label>What should they find or do?<textarea id="goal" name="goal" rows="2" placeholder="Find the article about the James Webb Space Telescope and open it." required maxlength="8000"></textarea></label></div>
@@ -43,7 +43,7 @@
   <section id="batch-results" class="batch-results" hidden>
     <div class="batch-heading"><h2>model comparison</h2><button id="batch-cancel" type="button" class="secondary">Stop comparison</button></div>
     <p id="batch-progress" role="status" aria-live="polite"></p>
-    <p class="hint">One run each · Jev first, then models in selection order · lower bars mean less spend or elapsed time, not better results. Failed runs are striped. “Completed” is an agent claim unless a check passed.</p>
+    <p class="hint">One run each · Jev first, then models in selection order · lower bars mean less spend or elapsed time, not better results. Unsuccessful runs show NA and are excluded from the bars. “Completed” is an agent claim unless a check passed.</p>
     <div class="batch-charts"><section aria-label="API cost bar chart"><h3>Total API cost · USD</h3><div id="batch-cost-chart"></div></section><section aria-label="Elapsed time bar chart"><h3>Elapsed time · seconds</h3><div id="batch-time-chart"></div></section></div>
     <div class="batch-table-wrap"><table><caption>Run results, including Jev’s text helper cost. Timing excludes queue time.</caption><thead><tr><th>Model</th><th>Outcome</th><th>Seconds</th><th>Tokens</th><th>API cost</th><th>Cost / Jev</th></tr></thead><tbody id="batch-table"></tbody></table></div>
   </section>
@@ -67,5 +67,16 @@
   <section id="summary" class="comparison-summary" hidden aria-live="polite"></section>
   <footer><p>Real browser previews update after each decision. Both agents use fresh sessions, identical controls, and the same limits. Elapsed time includes startup, browsing, previews, and cleanup; queue time is excluded.</p><p>A finished run is the agent’s claim unless your final-text check passes. This is a hands-on comparison, not a benchmark across models or websites. <a href="/docs">API docs ↗</a></p></footer>
 </main>
+<dialog id="model-guide" aria-labelledby="guide-title"><div class="guide-heading"><h2 id="guide-title">Model failure considerations</h2><form method="dialog"><button class="secondary" aria-label="Close guide">Close</button></form></div><article><p>OpenRouter gives models a common API, but it doesn’t make their supported features, access requirements, or reliability identical.</p>
+<p>Think of three separate questions: <strong>Can we call it? Can we interpret its response? Can it actually complete the task?</strong></p>
+<div class="guide-table"><table><thead><tr><th>Layer</th><th>Errors we’ve seen</th><th>What they tell us</th></tr></thead><tbody><tr><td><strong>Availability and access</strong></td><td>Muse required age confirmation; Llama Scout had no available endpoint.</td><td>Being listed in the catalog doesn’t guarantee the account can run the model.</td></tr><tr><td><strong>Supported API features</strong></td><td>Aion’s routes rejected forced tool selection. Haiku worked after switching to a strict JSON schema.</td><td>Different models and provider endpoints support different ways of requesting structured actions.</td></tr><tr><td><strong>Response formatting</strong></td><td>Haiku and Aion produced non-JSON replies. DeepSeek returned JSON that our action validator rejected.</td><td>The same instruction to “return JSON” is not equally reliable across models. Our parser was also overly strict about harmless formatting variations.</td></tr><tr><td><strong>Output budget</strong></td><td>Qwen exhausted its token allowance without returning action text.</td><td>Some models spend substantial output tokens on reasoning before producing a usable answer.</td></tr><tr><td><strong>Action correctness</strong></td><td>Nemo selected an unobserved target.</td><td>Valid JSON can still describe an invalid action.</td></tr><tr><td><strong>Task competence</strong></td><td>Nova followed irrelevant products; Phi entered a reviews/login path; Hermes repeated search actions.</td><td>A model can produce perfectly valid commands while pursuing an ineffective strategy.</td></tr><tr><td><strong>Our browser implementation</strong></td><td>Empty Amazon pages and overbroad freshness checks stopped runs.</td><td>Some failures came from our app, rather than the models. Those shared issues were fixed.</td></tr></tbody></table></div>
+<p><strong>One calling function is feasible; one identical request configuration is less reliable.</strong> A robust implementation usually has a shared caller with small adapters for:</p>
+<ul><li>Structured JSON versus tool calls.</li><li>Supported routing parameters.</li><li>Reasoning settings and output limits.</li><li>Response normalization and error interpretation.</li></ul>
+<p>After that, every model should pass through the <strong>same execution safeguards and outcome checks</strong>. We shouldn’t execute an invented target or declare success merely because a model says DONE.</p>
+<p>There is also a benchmarking tradeoff:</p>
+<ul><li><strong>Identical settings</strong> measure how well each model works as a drop-in replacement.</li><li><strong>Appropriate settings for each model</strong> measure what each can achieve when integrated properly.</li></ul>
+<p>Our demo currently mixes those approaches somewhat: Haiku and Nemo have schema adaptations, while most others use generic JSON mode. That’s useful for compatibility testing, but should be disclosed when comparing results.</p>
+<p>Jev’s typed decisions reduce the formatting problem. They don’t eliminate browser failures, wrong choices, or premature completion. Likewise, a failed run here doesn’t prove a general LLM cannot browse—it may need a better interface contract, a different budget, or a stronger workflow.</p></article><a href="/demo/model_failure_considerations.md" download>Download Markdown</a></dialog>
+<script src="/demo/guide.js" defer></script>
 </body>
 </html>

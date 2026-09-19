@@ -144,3 +144,15 @@ def test_text_comes_from_same_llm_decision_and_matching_context(policy):
     assert agent.field_text(context)[0] == "backpack"
     with pytest.raises(ValueError, match="context changed"):
         agent.field_text({**context, "goal": "different"})
+
+
+def test_nemo_schema_only_offers_observed_targets():
+    opts = response_options('https://openrouter.ai/api/v1', 'mistralai/mistral-nemo',
+                            ['CLICK', 'DONE'], {'CLICK': {'1': {}, '2': {}}})
+    assert opts['response_format']['json_schema']['schema']['properties']['target']['enum'] == [None, '1', '2']
+
+
+def test_multiple_or_unknown_tool_calls_are_never_executed():
+    for calls in [[{'type': 'function', 'function': {'name': 'other', 'arguments': '{}'}}], [{}, {}]]:
+        with pytest.raises(ValueError, match='exactly one browser_action'):
+            parse_action({'choices': [{'message': {'tool_calls': calls}}]})

@@ -38,5 +38,14 @@ assert.equal(bm({status: 'running', usage}, snapshot).seconds, null);
 assert.equal(bm({kind: 'jev', status: 'completed', execution_ms: 1250, usage}, snapshot).cost, .0026);
 assert.equal(bm({kind: 'llm', status: 'completed', execution_ms: 1250, usage, rates: {input: 1, output: 1}}, snapshot).cost, .0012);
 assert.equal(bm({kind: 'llm', status: 'completed', usage, rates: {}}, snapshot).complete, false);
-assert.equal(bm({kind: 'llm', status: 'failed', execution_ms: 1500, usage, rates: {input: 1, output: 1}}, snapshot).seconds, 1.5);
+assert.equal(bm({kind: 'llm', status: 'failed', execution_ms: 1500, usage, rates: {input: 1, output: 1}}, snapshot).seconds, null);
 console.log('Batch charts: 6 checks passed');
+
+for (const status of ['failed', 'blocked', 'cancelled', 'timed_out', 'interrupted', 'not_run']) {
+  const result = bm({kind:'llm',status,execution_ms:1500,usage,rates:{input:1,output:1}},snapshot);
+  assert.equal(result.unsuccessful,true);
+  assert.equal(result.complete,false);
+  assert.equal(result.seconds,null);
+}
+assert.equal(compare({unsuccessful:true,complete:false},{complete:true,cost:1}).title,'NA');
+console.log('Unsuccessful runs: metrics suppressed');

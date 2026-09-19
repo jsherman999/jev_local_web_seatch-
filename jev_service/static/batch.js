@@ -3,8 +3,9 @@ function batchMetrics(row, batch) {
   const rates = row.kind === 'jev' ? {text: batch.helper_rates, typesafe: batch.jev_rates} : {text: row.rates};
   const m = metrics({progress: {usage: row.usage?.groups ? row.usage : {calls: 0, groups: []}, rate_snapshot: rates}});
   const ended = terminal.has(row.status);
-  const seconds = ended && row.execution_ms != null ? row.execution_ms / 1000 : null;
-  return {...m, seconds, ended, complete: ended && m.complete};
+  const unsuccessful = row.status !== 'completed' && (ended || row.status === 'not_run');
+  const seconds = !unsuccessful && ended && row.execution_ms != null ? row.execution_ms / 1000 : null;
+  return {...m, seconds, ended, unsuccessful, complete: !unsuccessful && ended && m.complete};
 }
 function batchOutcome(row) {
   if (row.status === 'completed') return row.verification === 'passed' ? 'Check passed' : 'Completed · unverified';
@@ -67,7 +68,7 @@ window.JevBatch = (() => {
     const maximum = Math.max(...values.filter(v => v !== null), 0);
     rows.forEach((r, index) => {
       const value = values[index], item = el('div', null, 'batch-bar-row');
-      const valueLabel = value === null ? 'Unavailable' : field === 'cost' ? (r.m.estimated ? '≈ ' : '') + money(value) : value.toFixed(2) + 's';
+      const valueLabel = r.m.unsuccessful ? 'NA' : value === null ? 'Unavailable' : field === 'cost' ? (r.m.estimated ? '≈ ' : '') + money(value) : value.toFixed(2) + 's';
       item.append(el('div', `${r.row.model} · ${batchOutcome(r.row)}`, 'batch-bar-label'));
       const track = el('div', null, 'batch-track'), bar = el('div', null, 'batch-bar');
       if (r.row.kind === 'jev') bar.classList.add('reference');
@@ -89,10 +90,10 @@ window.JevBatch = (() => {
     const reference = rows[0].m;
     for (const {row, m} of rows) {
       const tr = el('tr');
-      const ratio = m.complete && reference.complete && reference.cost > 0 ? (m.cost / reference.cost).toFixed(2) + '×' : '—';
-      for (const value of [row.model, batchOutcome(row), m.seconds == null ? '—' : m.seconds.toFixed(2),
-        m.usage.groups?.length ? (m.tokensComplete ? '' : '≥ ') + integer(m.tokens) : '—',
-        m.complete ? (m.estimated ? '≈ ' : '') + money(m.cost) : 'Unavailable', ratio]) tr.append(el('td', value));
+      const ratio = m.unsuccessful || reference.unsuccessful ? 'NA' : m.complete && reference.complete && reference.cost > 0 ? (m.cost / reference.cost).toFixed(2) + '×' : '—';
+      for (const value of [row.model, batchOutcome(row), m.unsuccessful ? 'NA' : m.seconds == null ? '—' : m.seconds.toFixed(2),
+        m.unsuccessful ? 'NA' : m.usage.groups?.length ? (m.tokensComplete ? '' : '≥ ') + integer(m.tokens) : '—',
+        m.unsuccessful ? 'NA' : m.complete ? (m.estimated ? '≈ ' : '') + money(m.cost) : 'Unavailable', ratio]) tr.append(el('td', value));
       if (row.error) tr.children[1].append(el('small', row.error));
       table.append(tr);
     }

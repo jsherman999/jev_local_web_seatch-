@@ -21,6 +21,7 @@ function groupCost(group, job = null) {
   if (input === null || output === null || (group.cached_tokens && cached === null)) return {value: null, estimated: true};
   return {value: ((group.input_tokens - group.cached_tokens) * input + group.cached_tokens * (cached ?? input) + group.output_tokens * output) / 1e6, estimated: true};
 }
+function unsuccessful(job) { return terminal.has(job.status) && job.status !== 'completed'; }
 function metrics(job) {
   const usage = job.result?.usage?.groups ? job.result.usage : (job.progress.usage || {calls: 0, groups: []});
   let tokens = 0, cost = 0, complete = usage.groups.length > 0, tokensComplete = true, estimated = false;
@@ -32,7 +33,7 @@ function metrics(job) {
     estimated ||= result.estimated;
     cost += result.value ?? 0;
   }
-  return {usage, tokens, tokensComplete, cost, complete, estimated};
+  return {usage, tokens, tokensComplete, cost, complete: complete && !unsuccessful(job), estimated, unsuccessful: unsuccessful(job)};
 }
 function duration(job) {
   if (job.progress.execution_ms != null) return job.progress.execution_ms / 1000;
@@ -45,10 +46,10 @@ function renderLane(side, job) {
   if (side === 'llm') $('.model', root).textContent = job.progress.model_config?.model || m.usage.groups.find(g => g.provider === 'text')?.model || config.text_model;
   $('.status', root).textContent = job.status.replaceAll('_', ' ');
   $('.status', root).dataset.state = job.status;
-  $('.elapsed', root).textContent = duration(job).toFixed(1) + 's';
-  $('.tokens', root).textContent = (m.tokensComplete ? '' : '≥ ') + integer(m.tokens);
-  $('.cost', root).textContent = m.complete ? (m.estimated ? '≈ ' : '') + money(m.cost) : 'Unavailable';
-  $('.calls', root).textContent = m.usage.calls + ' model call' + (m.usage.calls === 1 ? '' : 's');
+  $('.elapsed', root).textContent = m.unsuccessful ? 'NA' : duration(job).toFixed(1) + 's';
+  $('.tokens', root).textContent = m.unsuccessful ? 'NA' : (m.tokensComplete ? '' : '≥ ') + integer(m.tokens);
+  $('.cost', root).textContent = m.unsuccessful ? 'NA' : m.complete ? (m.estimated ? '≈ ' : '') + money(m.cost) : 'Unavailable';
+  $('.calls', root).textContent = m.unsuccessful ? 'NA' : m.usage.calls + ' model call' + (m.usage.calls === 1 ? '' : 's');
   const url = job.result?.page.url || job.progress.url || job.request.url;
   $('.address', root).textContent = url;
   $('.address', root).title = url;
@@ -59,11 +60,11 @@ function renderLane(side, job) {
     $('.empty', root).hidden = true;
   }
   const actions = job.result?.actions || job.progress.actions || [];
-  $('.activity', root).textContent = running ? (m.usage.pending_calls ? 'Choosing the next action…' : 'Working in the browser…') : job.status === 'queued' ? 'Waiting to start…' : `${actions.length} browser actions · ${job.result?.verification === 'passed' ? 'check passed' : 'run stopped'}`;
+  $('.activity', root).textContent = m.unsuccessful ? 'Run unsuccessful · metrics NA' : running ? (m.usage.pending_calls ? 'Choosing the next action…' : 'Working in the browser…') : job.status === 'queued' ? 'Waiting to start…' : `${actions.length} browser actions · ${job.result?.verification === 'passed' ? 'check passed' : 'run stopped'}`;
   $('.outcome', root).textContent = job.error || (job.status === 'completed' ? job.result?.verification === 'passed' ? 'Finished · your final-page check passed.' : 'Agent reports done · no independent outcome check was requested.' : '');
   const usageBox = $('.usage', root);
   usageBox.replaceChildren();
-  for (const group of m.usage.groups) {
+  for (const group of m.unsuccessful ? [] : m.usage.groups) {
     const p = document.createElement('p'), c = groupCost(group, job);
     p.textContent = `${group.provider === 'typesafe' ? 'Jev decisions' : side === 'jev' ? 'Text helper' : 'LLM decisions + text'} · ${group.model}\n${integer(group.input_tokens)} input + ${integer(group.output_tokens)} output (${integer(group.cached_tokens)} cached input) · ${group.calls} calls · ${c.value === null ? 'cost unavailable' : (c.estimated ? 'estimated ' : 'reported ') + money(c.value)}${group.tokens_complete ? '' : ' · usage incomplete / call pending'}`;
     usageBox.append(p);
@@ -81,6 +82,7 @@ function renderLane(side, job) {
   if (!link.hidden) link.href = url;
 }
 function costComparison(a, b, label) {
+  if (a.unsuccessful || b.unsuccessful) return {title: 'NA', detail: 'Cost comparison requires two completed runs.'};
   if (!a.complete || !b.complete) return {title: 'Cost comparison unavailable', detail: 'Enter model rates before running, or use a provider that reports cost. Missing usage is not zero.'};
   const prefix = a.estimated || b.estimated ? '≈ ' : '';
   if (a.cost === b.cost) return {title: 'Equal API cost', detail: `${prefix}${money(a.cost)} each.`};
@@ -107,7 +109,7 @@ function render() {
     const label = a.progress.model_config?.label || am.usage.groups.find(g => g.provider === 'text')?.model || config.text_model || 'Regular LLM';
     const cost = costComparison(am, bm, label);
     $('#cost-ratio').textContent = cost.title; $('#cost-difference').textContent = cost.detail;
-    let text = `Regular LLM: ${a.status.replaceAll('_', ' ')} in ${duration(a).toFixed(1)}s. Jev: ${b.status.replaceAll('_', ' ')} in ${duration(b).toFixed(1)}s.`;
+    let text = `Regular LLM: ${a.status.replaceAll('_', ' ')} in ${unsuccessful(a) ? 'NA' : duration(a).toFixed(1) + 's'}. Jev: ${b.status.replaceAll('_', ' ')} in ${unsuccessful(b) ? 'NA' : duration(b).toFixed(1) + 's'}.`;
     if (a.status === 'completed' && b.status === 'completed' && a.result?.verification === 'passed' && b.result?.verification === 'passed') {
       const difference = Math.abs(duration(a) - duration(b));
       text += ` Both final-page checks passed. ${difference < .1 ? 'Their times were essentially equal.' : (duration(a) < duration(b) ? 'The regular LLM' : 'Jev') + ' finished ' + difference.toFixed(1) + 's sooner.'}`;

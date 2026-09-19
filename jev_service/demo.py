@@ -21,6 +21,14 @@ def routes(authenticate):
     async def page():
         return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-store"})
 
+    @router.get('/demo/guide.js', include_in_schema=False)
+    async def guide_script():
+        return FileResponse(STATIC / 'guide.js', media_type='text/javascript')
+
+    @router.get('/demo/model_failure_considerations.md', include_in_schema=False)
+    async def model_guide():
+        return FileResponse(ROOT / 'model_failure_considerations.md', media_type='text/markdown')
+
     @router.get("/demo/app.js", include_in_schema=False)
     async def script():
         return FileResponse(STATIC / "app.js", media_type="text/javascript")

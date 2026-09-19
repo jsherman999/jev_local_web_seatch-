@@ -211,11 +211,21 @@ screenshots and live function traces for every participant; the original two-pan
 comparison remains available separately.
 
 Progress, cancellation, cost/time bar charts, and a results table appear below the
-form. Jev is highlighted; failed attempts are striped and never presented as successful
-wins. Unknown costs remain unavailable. Jev cost includes its text helper, and rate
+form. Jev is highlighted. Unsuccessful attempts show NA for time, tokens, cost, and
+cost ratios, with no bar; their error messages remain visible. Unknown costs on successful
+runs remain unavailable. Raw accounting remains in the job API for diagnosis. Jev cost includes its text helper, and rate
 estimates are captured at submission. A single run is illustrative, not a statistically
 reliable benchmark. Site changes, provider load, and cache effects can affect results.
 
 Reloading the tab restores the last batch. Completed results persist locally. A
 cancel stops the active run and skips remaining models. A service restart interrupts
 unfinished work without replaying it; entered keys are never persisted.
+
+Mistral Nemo uses
+strict JSON Schema with observed target IDs; local operation/target validation remains
+mandatory. Unsupported provider routes fail explicitly rather than silently switching
+models. Muse age confirmation must be completed by the API-key owner in OpenRouter
+account preferences; browser isolation cannot satisfy that account requirement.
+
+Aion 3.0 currently remains on generic JSON mode: its available routes rejected forced
+tool selection during testing. Non-JSON replies still fail safely.
