@@ -11,9 +11,25 @@ function batchOutcome(row) {
   if (row.status === 'completed') return row.verification === 'passed' ? 'Check passed' : 'Completed · unverified';
   return row.status.replaceAll('_', ' ');
 }
+function batchSortValue({row, m}, field) {
+  if (row.status !== 'completed') return null;
+  const value = field === 'cost' ? (m.complete ? m.cost : null)
+    : field === 'tokens' ? (m.tokensComplete && m.usage.groups?.length ? m.tokens : null) : m.seconds;
+  return Number.isFinite(value) ? value : null;
+}
+function sortBatchRows(rows, field, direction) {
+  return [...rows].sort((a, b) => {
+    const av = batchSortValue(a, field), bv = batchSortValue(b, field);
+    // Missing totals and unsuccessful runs stay last in either direction.
+    if (av === null) return bv === null ? 0 : 1;
+    if (bv === null) return -1;
+    return direction === 'desc' ? bv - av : av - bv;
+  });
+}
 window.JevBatch = (() => {
   let selected = new Map(), listing = null, current = null, timer = null;
   let starting = false;
+  let sortField = 'cost', sortDirection = 'asc';
   const active = () => starting || current?.status === 'running';
   const el = (tag, text, className) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (className) n.className = className; return n; };
   function picker() {
@@ -81,16 +97,22 @@ window.JevBatch = (() => {
   function renderBatch() {
     $('#batch-results').hidden = false; $('.race').hidden = true; $('.how-it-works').hidden = true;
     $('#summary').hidden = true; $('#cost-comparison').hidden = true;
-    const rows = current.runs.map(row => ({row, m: batchMetrics(row, current)}));
+    const runRows = current.runs.map(row => ({row, m: batchMetrics(row, current)}));
+    const rows = active() ? runRows : sortBatchRows(runRows, sortField, sortDirection);
+    $('#batch-sort').value = sortField; $('#batch-sort-direction').value = sortDirection;
+    $('#batch-sort').disabled = active(); $('#batch-sort-direction').disabled = active();
+    $('#batch-sort-hint').textContent = active()
+      ? 'Runs stay in execution order until the comparison ends, then sort by lowest total cost.'
+      : 'Sorting applies to both charts and the table. Missing or incomplete totals stay last.';
     const done = rows.filter(r => r.m.ended).length;
     const running = current.runs.find(r => ['running', 'queued'].includes(r.status));
     $('#batch-progress').textContent = `${done} / ${rows.length} runs ended · ${current.status}${running ? ' · ' + running.model : ''}${current.cancel_requested && current.status === 'running' ? ' · stopping' : ''}${current.error ? ' · ' + current.error : ''}`;
     chart($('#batch-cost-chart'), rows, 'cost'); chart($('#batch-time-chart'), rows, 'seconds');
     const table = $('#batch-table'); table.replaceChildren();
-    const reference = rows[0].m;
+    const reference = runRows.find(r => r.row.kind === 'jev')?.m;
     for (const {row, m} of rows) {
       const tr = el('tr');
-      const ratio = m.unsuccessful || reference.unsuccessful ? 'NA' : m.complete && reference.complete && reference.cost > 0 ? (m.cost / reference.cost).toFixed(2) + '×' : '—';
+      const ratio = m.unsuccessful || reference?.unsuccessful ? 'NA' : m.complete && reference?.complete && reference.cost > 0 ? (m.cost / reference.cost).toFixed(2) + '×' : '—';
       for (const value of [row.model, batchOutcome(row), m.unsuccessful ? 'NA' : m.seconds == null ? '—' : m.seconds.toFixed(2),
         m.unsuccessful ? 'NA' : m.usage.groups?.length ? (m.tokensComplete ? '' : '≥ ') + integer(m.tokens) : '—',
         m.unsuccessful ? 'NA' : m.complete ? (m.estimated ? '≈ ' : '') + money(m.cost) : 'Unavailable', ratio]) tr.append(el('td', value));
@@ -120,6 +142,14 @@ window.JevBatch = (() => {
       practicePreset = $('#verify').value === 'Practice task complete.';
     }
   }
+  $('#batch-sort').addEventListener('change', () => {
+    sortField = $('#batch-sort').value;
+    if (current?.runs) renderBatch();
+  });
+  $('#batch-sort-direction').addEventListener('change', () => {
+    sortDirection = $('#batch-sort-direction').value;
+    if (current?.runs) renderBatch();
+  });
   $('#batch-search').addEventListener('input', picker);
   $('#batch-start').addEventListener('click', async () => {
     if (busy || active()) return;
@@ -137,6 +167,7 @@ window.JevBatch = (() => {
     $('#batch-picker-message').textContent = 'Starting sequential comparison…';
     try {
       current = await api('/v1/batches', {method: 'POST', headers: {'X-LLM-API-Key': key}, body: JSON.stringify(body)});
+      sortField = 'cost'; sortDirection = 'asc';
       starting = false; comparison = null; sessionStorage.removeItem('jev-comparison'); sessionStorage.setItem('jev-batch', current.id);
       $('#batch-picker-message').textContent = 'Comparison started. Results appear below.';
       message(''); renderBatch(); await pollBatch();
