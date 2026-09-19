@@ -24,6 +24,9 @@ def adapt_openai(meter=None, trace=None, baseline=False):
     original = model.post_json
 
     def dispatch(url, key, body):
+        if baseline and urlparse(url).hostname == 'openrouter.ai':
+            from .providers import openrouter_completion
+            return openrouter_completion(model.CLIENT, url, key, body)
         if baseline and urlparse(url).hostname == 'api.anthropic.com':
             from .providers import anthropic_completion
             return anthropic_completion(key, body)
@@ -95,21 +98,30 @@ def extract_page(browser, limit):
     return page
 
 
-def run(request, baseline=False):
-    from jev_ultrafast import Agent
+def blocked_reason(state, decisions, limit):
+    if state["status"] != "blocked":
+        return f"Decision limit reached ({decisions}/{limit}); the task is unfinished. Inspect the partial result."
+    last = (state.get("decisions") or [{}])[-1]
+    if last.get("choice") == "BLOCKED":
+        return (f"Agent chose BLOCKED after {decisions} decision(s) and "
+                f"{len(state['history'])} browser action(s); inspect the partial result.")
+    return "Agent stopped after repeated browser actions made no page progress; inspect the partial result."
 
+
+def run(request, baseline=False):
     meter = UsageMeter()
     trace = Trace(emit, enabled=request.capture_screenshots)
     adapt_openai(meter, trace, baseline)
     if baseline:
         from .baseline import install
-        install()
+        install(emit)
     if request.isolate_browser:
         from .browser_context import install
         install()
     from .browser_adapter import install as install_browser_adapter
     install_browser_adapter(emit)
     trace.install_browser_hooks(baseline, request.isolate_browser)
+    from jev_ultrafast.agent import Agent
     started = time.monotonic()
     with Agent(str(request.url), request.goal, screenshots=request.capture_screenshots) as agent:
         state = agent.snapshot()
@@ -164,7 +176,7 @@ def run(request, baseline=False):
         }
         error = None
         if status == "blocked":
-            error = "Agent blocked or decision limit reached; inspect the partial result."
+            error = blocked_reason(state, index + 1, request.max_steps)
         elif status == "failed":
             error = "Final page did not pass the requested verification checks."
         trace.record("return", "worker_run", "instant", status=status,

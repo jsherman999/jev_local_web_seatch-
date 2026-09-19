@@ -14,6 +14,38 @@ from jev_service.models import TERMINAL
 client = service_client
 
 
+def test_openrouter_forbidden_reports_message_without_secrets_or_metadata(monkeypatch):
+    monkeypatch.setenv('EXTRA_API_TOKEN', 'another-secret')
+    def respond(request):
+        return httpx.Response(403, json={'error': {
+            'message': 'Contributor access denied. sk-or-test-secret another-secret',
+            'metadata': {'raw': 'private request content'}}})
+    with httpx.Client(transport=httpx.MockTransport(respond)) as transport:
+        with pytest.raises(RuntimeError) as error:
+            providers.openrouter_completion(transport, 'https://openrouter.ai/api/v1/chat/completions',
+                                            'sk-or-test-secret', {})
+    message = str(error.value)
+    assert 'HTTP 403: Contributor access denied.' in message
+    assert 'sk-or-test-secret' not in message and 'another-secret' not in message
+    assert 'private request content' not in message
+
+
+def test_openrouter_preserves_success_usage_and_never_follows_redirects():
+    payload = {'choices': [{'message': {'content': '{}'}}], 'usage': {'cost': .004}}
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=payload))) as client:
+        assert providers.openrouter_completion(client, 'https://openrouter.ai/api/v1/chat/completions',
+                                               'secret', {}) == payload
+    seen = []
+    def redirect(request):
+        seen.append(request.url.host)
+        return httpx.Response(302, headers={'Location': 'https://other.test'})
+    with httpx.Client(transport=httpx.MockTransport(redirect), follow_redirects=True) as client:
+        with pytest.raises(RuntimeError, match='HTTP 302'):
+            providers.openrouter_completion(client, 'https://openrouter.ai/api/v1/chat/completions',
+                                            'secret', {})
+    assert seen == ['openrouter.ai']
+
+
 def test_detection_never_guesses_shared_prefix():
     assert providers.detect_provider('sk-proj-example') == 'openai'
     assert providers.detect_provider('sk-ant-example') == 'anthropic'

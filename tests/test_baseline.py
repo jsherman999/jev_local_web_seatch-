@@ -2,7 +2,77 @@ import json
 
 import pytest
 
-from jev_service.baseline import install
+from jev_service.baseline import install, parse_action
+
+
+def completion(content, reason='stop', **message):
+    return {'choices': [{'finish_reason': reason, 'message': {'content': content, **message}}]}
+
+
+def test_fenced_json_still_uses_action_target_validation(policy, monkeypatch):
+    from jev_ultrafast import model
+
+    agent, _ = policy
+    monkeypatch.setattr(model, 'post_json', lambda *_: completion(
+        '```json\n{"operation":"TYPE_TEXT","target":"999","text":"query"}\n```'))
+    with pytest.raises(ValueError, match='unobserved target'):
+        agent.choose(PAGE, 'Search', [])
+
+
+@pytest.mark.parametrize('fence', ['', 'json', 'JSON'])
+def test_accepts_only_complete_fenced_action(fence):
+    action = {'operation': 'DONE', 'target': None, 'text': None}
+    assert parse_action(completion(f'```{fence}\n{json.dumps(action)}\n```')) == action
+
+
+@pytest.mark.parametrize('content', ['Here is JSON: {"operation":"DONE"}', '[]', 'null',
+                                    '{"operation":[]}', '{"operation":"DONE","target":42.5}',
+                                    '{"operation":"DONE"}{"operation":"CLICK"}'])
+def test_rejects_prose_multiple_objects_and_invalid_structures(content):
+    with pytest.raises(ValueError, match='no action executed'):
+        parse_action(completion(content))
+
+
+def test_null_response_and_token_limit_have_specific_diagnostics():
+    events = []
+    with pytest.raises(ValueError, match='no action text'):
+        parse_action(completion(None), events.append)
+    assert events[-1]['response_diagnostic']['content_present'] is False
+    for content in [None, '{"operation":"DONE"}']:
+        with pytest.raises(ValueError, match='output token limit'):
+            parse_action(completion(content, 'length'), events.append)
+    assert events[-1]['response_diagnostic']['finish_reason'] == 'length'
+    with pytest.raises(ValueError, match='refused or filtered'):
+        parse_action(completion(None, refusal='Private refusal text'), events.append)
+    assert 'Private refusal text' not in json.dumps(events)
+
+
+def test_integer_target_and_extra_metadata_are_safe(policy):
+    agent, response = policy
+    response({'operation': 'TYPE_TEXT', 'target': 1, 'text': 'laptop',
+              'explanation': 'extra metadata', 'javascript': 'must never execute'})
+    assert agent.choose(PAGE, 'Search laptop', [])['choice'] == 'fill-1'
+    response({'operation': 'TYPE_TEXT', 'target': 999, 'text': 'laptop'})
+    with pytest.raises(ValueError, match='unobserved target'):
+        agent.choose(PAGE, 'Search laptop', [])
+
+
+@pytest.mark.parametrize('target', [True, False, 1.0, -1, 0, [], {}])
+def test_ambiguous_targets_fail_with_specific_diagnostic(target):
+    events = []
+    with pytest.raises(ValueError, match='invalid target type'):
+        parse_action(completion(json.dumps({'operation': 'CLICK', 'target': target})), events.append)
+    assert events[-1]['action_validation']['failed_field'] == 'target'
+
+
+def test_normalization_diagnostics_do_not_store_values():
+    events = []
+    result = parse_action(completion(json.dumps({'operation': 'CLICK', 'target': 1,
+                                                'explanation': 'private content'})), events.append)
+    assert result == {'operation': 'CLICK', 'target': '1', 'text': None}
+    assert events[-1]['action_validation']['ignored_extra_fields'] == 1
+    assert events[-1]['action_validation']['normalized_integer_target'] is True
+    assert 'private content' not in json.dumps(events)
 
 
 @pytest.fixture

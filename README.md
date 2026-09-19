@@ -18,6 +18,15 @@ formats (including generic `sk-` keys used by DeepSeek and older OpenAI keys) re
 provider choice; keys are never tried against multiple providers. The provider's live
 catalog populates the dropdown, with known non-chat models visible but disabled.
 Model listings do not guarantee account access or compatibility with JSON browser actions.
+The baseline accepts a single plain or Markdown-fenced JSON action, with the same
+observed-target validation. Empty responses, output-limit endings, and refusals fail
+with specific messages. Positive integer element IDs are normalized to strings;
+extra metadata is ignored and never executed. Invalid field types are reported in
+`progress.action_validation`, without recording response values. On failure, no action
+is executed or automatically retried. Safe response
+diagnostics retain the finish reason and presence of content, not model text or reasoning.
+OpenRouter errors include a bounded, credential-redacted provider explanation when
+available. Token budgets and account data-policy settings are not changed automatically.
 Leave the key blank to use the configured service default.
 
 Entered keys are held only in tab/service/worker memory and passed through a private

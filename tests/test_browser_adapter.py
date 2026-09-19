@@ -1,6 +1,45 @@
 import pytest
 
-from jev_service.browser_adapter import filter_select_actions, install, selectable
+from jev_service.browser_adapter import filter_select_actions, install, observe_ready, selectable
+
+
+@pytest.mark.parametrize('screenshots', [False, True])
+def test_empty_document_waits_for_content_without_replaying_input(monkeypatch, screenshots):
+    empty = {"url": "https://example.com", "text": "", "actions": [{"kind": "wait"}]}
+    ready = {**empty, "text": "Search products"}
+    pages = iter([empty, empty, ready])
+    calls, events = [], []
+    monkeypatch.setattr('jev_service.browser_adapter.time.sleep', lambda _: None)
+
+    def observe(**kwargs):
+        calls.append(kwargs)
+        return next(pages)
+
+    assert observe_ready(None, observe, events.append, screenshot=screenshots) == ready
+    assert calls == [{"screenshot": screenshots}] * 3
+    assert [e['page_diagnostic']['status'] for e in events] == ['waiting', 'ready']
+
+
+def test_permanently_empty_page_reports_failed_readiness_check(monkeypatch):
+    from types import SimpleNamespace
+
+    clock = iter([0, 11, 11])
+    monkeypatch.setattr('jev_service.browser_adapter.time.monotonic', lambda: next(clock))
+    browser = SimpleNamespace(evaluate=lambda _: 'complete')
+    events = []
+    with pytest.raises(RuntimeError, match='Page remained empty'):
+        observe_ready(browser, lambda: {"url": "https://example.com", "text": "", "actions": []},
+                      events.append)
+    assert events[-1]['page_diagnostic']['failed_check'] == 'readable_content'
+    assert events[-1]['page_diagnostic']['ready_state'] == 'complete'
+
+
+def test_usable_page_does_not_add_a_delay(monkeypatch):
+    def unexpected_wait(_):
+        pytest.fail('Usable pages should not wait')
+    monkeypatch.setattr('jev_service.browser_adapter.time.sleep', unexpected_wait)
+    page = {"text": "", "actions": [{"kind": "fill"}]}
+    assert observe_ready(None, lambda: page, lambda _: None) is page
 
 
 def test_covered_native_options_are_removed_but_visible_button_is_kept():
@@ -40,6 +79,7 @@ def adapter(monkeypatch):
             return {"executed": "e1"}
 
     monkeypatch.setattr(agent, "Browser", FakeBrowser)
+    monkeypatch.setattr(agent, "Agent", agent.Agent)
     events = []
     install(events.append)
     return agent.Browser(), events
@@ -102,3 +142,41 @@ def test_ambiguous_selection_is_not_retried(adapter):
         browser.act({"id": "e1", "kind": "select", "node": 1}, {})
     assert len(attempts) == 2
     assert browser.executed == 0
+
+
+def test_typing_uses_field_guard_instead_of_changing_banner(adapter):
+    browser, events = adapter
+    page = {"page_key": ['document', 'url', 'form-values'], "guards": {'1': ['search', 'unchanged']}}
+    action = {"kind": "fill", "node": 1}
+    browser.evaluate = lambda _: [page['page_key'], page['guards']['1']]
+    assert browser.fresh(page, action)
+    browser.fill_preflight = (page, action)
+    assert browser.fresh(page)
+    # A changed document, form value or field guard must still reject input.
+    for current in [[['new-document'], page['guards']['1']], [page['page_key'], ['changed']], None]:
+        browser.evaluate = lambda _, current=current: current
+        assert not browser.fresh(page, action)
+    assert events[-1]['action_diagnostic']['failed_check'] == 'field_freshness'
+
+
+def test_field_scope_is_active_only_during_selected_fill(monkeypatch):
+    from types import SimpleNamespace
+
+    from jev_ultrafast import agent
+
+    page = {"actions": [{"id": "e1", "kind": "fill", "node": 1}]}
+
+    class FakeAgent:
+        def command(self, name, body=None):
+            assert self.browser.fill_preflight == (page, page['actions'][0])
+            raise ValueError('test failure')
+
+    monkeypatch.setattr(agent, 'Agent', FakeAgent)
+    monkeypatch.setattr(agent, 'Browser', agent.Browser)
+    install(lambda _: None)
+    instance = agent.Agent()
+    instance.browser = SimpleNamespace()
+    instance.state = {"page": page, "decision": {"choice": "e1"}}
+    with pytest.raises(ValueError, match='test failure'):
+        instance.command('act')
+    assert instance.browser.fill_preflight is None

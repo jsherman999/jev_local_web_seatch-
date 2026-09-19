@@ -169,6 +169,20 @@ Upstream limitations include frames, shadow DOM, canvas, uploads, pop-up tabs, c
 keyboard widgets, and some nested scrolling. CAPTCHA/login challenges may block tasks.
 The API is an integration wrapper around upstream Jev, not a guarantee of website compatibility.
 
+Both demo lanes wait up to ten seconds when an observation contains no readable text
+or usable controls (the synthetic WAIT action does not count). This only reobserves;
+it never reloads a page or repeats input. The wait is included in execution time.
+`progress.page_diagnostic` records the `readable_content` check and whether content
+arrived or the wait expired. A persistently empty page fails with a specific loading
+error before a model is asked to decide on it. Blocked-agent, no-progress, and decision
+budget errors are reported separately.
+
+Typing checks the selected field and its surrounding form, document identity, URL,
+viewport, and form values before text generation and again before input. Unrelated
+changing page text (such as rotating banners) does not invalidate that field decision.
+The normal visibility, enabled, read-only, and mouse-hit checks still apply. DONE,
+BLOCKED, and untargeted actions retain the full-page freshness check.
+
 The wrapper supports native dropdowns covered by their own aria-hidden visual
 decoration. It validates the relationship and rechecks the control before dispatching
 native input/change events. Unrelated overlays remain blocked. Dropdown preflight

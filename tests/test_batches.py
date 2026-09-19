@@ -77,6 +77,9 @@ def test_cancel_stops_active_run_skips_rest_and_releases_reservation(client):
     assert batch['status'] == 'cancelled'
     assert all(r['status'] in {'cancelled', 'not_run'} for r in batch['runs'])
     assert not client.app.state.batches.active_id
+    fresh = finish(client, client.post('/v1/batches', json=body(), headers=HEADERS).json()['id'])
+    assert fresh['status'] == 'completed'
+    assert all(r['status'] == 'completed' for r in fresh['runs'])
     assert client.post('/v1/jobs', json=BODY).status_code == 202
 
 
@@ -85,6 +88,27 @@ def test_failed_run_does_not_prevent_remaining_models(client):
     assert batch['status'] == 'completed'
     assert all(r['status'] == 'failed' for r in batch['runs'])
     assert all(r['execution_ms'] is not None for r in batch['runs'])
+
+
+def test_openrouter_alias_in_ten_model_batch_reaches_worker_unchanged(client, monkeypatch):
+    request = body(10)
+    for model in request['models']:
+        model['provider'] = 'openrouter'
+    alias = '~anthropic/claude-haiku-latest'
+    request['models'][5]['model'] = alias
+
+    async def listing(key, provider):
+        return {'provider': provider, 'models': [
+            {'id': m['model'], 'supported': True} for m in request['models']]}
+    monkeypatch.setattr('jev_service.demo.catalog', listing)
+    response = client.post('/v1/batches', json=request, headers=HEADERS)
+    assert response.status_code == 202
+    batch = finish(client, response.json()['id'])
+    row = batch['runs'][6]
+    assert row['model'] == alias
+    assert row['status'] == 'completed'
+    job = client.portal.call(lambda: client.app.state.baseline.get(row['job_id']))
+    assert job['result']['page']['title'] == alias
 
 
 def test_limits_duplicates_provider_and_auth(client, monkeypatch):

@@ -1,6 +1,37 @@
 """Compatibility guards around the unchanged upstream browser executor."""
 
 import json
+import time
+
+
+def readable_page(page):
+    """A title or the synthetic WAIT action alone is not usable page content."""
+    return bool(page.get("text", "").strip() or any(
+        a["kind"] != "wait" for a in page.get("actions", [])))
+
+
+def observe_ready(browser, observe, emit, *args, **kwargs):
+    """Wait for empty documents without reloading or replaying browser input."""
+    started = time.monotonic()
+    page = observe(*args, **kwargs)
+    if readable_page(page):
+        return page
+    emit({"event": "progress", "page_diagnostic": {
+        "failed_check": "readable_content", "status": "waiting", "url": page["url"]}})
+    while time.monotonic() - started < 10:
+        time.sleep(.1)
+        page = observe(*args, **kwargs)
+        if readable_page(page):
+            emit({"event": "progress", "page_diagnostic": {
+                "failed_check": None, "status": "ready", "url": page["url"],
+                "waited_ms": round((time.monotonic() - started) * 1000)}})
+            return page
+    emit({"event": "progress", "page_diagnostic": {
+        "failed_check": "readable_content", "status": "failed", "url": page["url"],
+        "ready_state": browser.evaluate("document.readyState"),
+        "waited_ms": round((time.monotonic() - started) * 1000)}})
+    raise RuntimeError("Page remained empty: no readable text or browser controls appeared within "
+                       "10 seconds. No model decision was requested for this empty page.")
 
 SELECT_DIAGNOSTIC = """action => {
   const e = window.__jevFast?.nodes.get(action.node);
@@ -68,9 +99,46 @@ def install(emit):
 
     original = agent.Browser
 
+    original_agent = agent.Agent
+
+    class CompatibleAgent(original_agent):
+        def command(self, name, body=None):
+            # The upstream text-helper preflight calls fresh(page) without its
+            # target. Scope only that act call to the actual selected field.
+            decision = self.state.get("decision")
+            if name == "act" and decision:
+                page = self.state["page"]
+                action = next((a for a in page["actions"]
+                               if a["id"] == decision["choice"] and a["kind"] == "fill"), None)
+                if action:
+                    self.browser.fill_preflight = (page, action)
+                    try:
+                        return super().command(name, body)
+                    finally:
+                        self.browser.fill_preflight = None
+            return super().command(name, body)
+
     class CompatibleBrowser(original):
+        def fresh(self, page, action=None):
+            pending = getattr(self, "fill_preflight", None)
+            if action is None and pending and pending[0] is page:
+                action = pending[1]
+            if action is not None and action["kind"] == "fill":
+                node = action["node"]
+                if type(node) is not int:
+                    return False
+                current = self.evaluate(
+                    "(() => { const c=window.__jevFast; "
+                    f"return c ? [c.pageKey(),c.guard(c.nodes.get({node}))] : null; }})()")
+                valid = current == [page["page_key"], page["guards"].get(str(node))]
+                if not valid:
+                    emit({"event": "progress", "action_diagnostic": {
+                        "failed_check": "field_freshness", "operation": "TYPE_TEXT"}})
+                return valid
+            return super().fresh(page, action)
+
         def observe(self, *args, **kwargs):
-            page = super().observe(*args, **kwargs)
+            page = observe_ready(self, super().observe, emit, *args, **kwargs)
             selects = {a["node"]: a for a in page["actions"] if a["kind"] == "select"}
             if selects:
                 # Test the actual native control, not one arbitrary option. Options were
@@ -119,3 +187,4 @@ def install(emit):
             return super().act(action, page, text=text)
 
     agent.Browser = CompatibleBrowser
+    agent.Agent = CompatibleAgent

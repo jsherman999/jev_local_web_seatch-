@@ -21,10 +21,12 @@ def install():
                 self.call("Emulation.setDeviceMetricsOverride", width=1120, height=780,
                           deviceScaleFactor=1, mobile=False)
                 self.call("Emulation.setFocusEmulationEnabled", enabled=True)
-                self.call("Page.navigate", url=url)
+                navigation = self.call("Page.navigate", url=url)
+                if navigation.get("errorText"):
+                    raise RuntimeError("Initial navigation failed: " + navigation["errorText"])
                 deadline = time.monotonic() + 15
                 while time.monotonic() < deadline:
-                    if self.evaluate("document.readyState") == "complete":
+                    if self.evaluate("location.href !== 'about:blank' && document.readyState === 'complete'"):
                         break
                     time.sleep(0.02)
             except BaseException:

@@ -1,5 +1,7 @@
 """Fixed provider endpoints; keys are never probed against multiple services."""
 import os
+import re
+import time
 from typing import Literal
 
 import httpx
@@ -19,6 +21,39 @@ PROVIDERS = {
 }
 
 
+def openrouter_completion(client, url, key, body):
+    """Retain a bounded, redacted provider explanation, never raw response metadata."""
+    for attempt in range(3):
+        try:
+            response = client.post(url, json=body, headers={'Authorization': f'Bearer {key}'},
+                                   follow_redirects=False)
+        except httpx.HTTPError:
+            raise RuntimeError('Model connection failed; no action executed.') from None
+        if response.status_code in {429, 529, 503} and attempt < 2:
+            time.sleep(.5 * 2**attempt)
+            continue
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        error = payload.get('error') if isinstance(payload, dict) else None
+        if response.is_error or response.is_redirect or error:
+            detail = error.get('message') if isinstance(error, dict) else None
+            if not isinstance(detail, str):
+                detail = 'Provider did not supply an error explanation.'
+            # Redact before truncating: a key at the boundary must not leak a prefix.
+            secrets = [key, *[v for k, v in os.environ.items()
+                              if any(part in k for part in ('KEY', 'TOKEN', 'SECRET')) and v]]
+            for secret in sorted(filter(None, secrets), key=len, reverse=True):
+                detail = detail.replace(secret, '[redacted]')
+            detail = re.sub(r'(?i)Bearer\s+\S+|\bsk-[\w-]+', '[redacted]', detail)
+            detail = ' '.join(detail.split())[:500]
+            raise RuntimeError(f'OpenRouter HTTP {response.status_code}: {detail} No action executed.')
+        if not isinstance(payload, dict) or not payload:
+            raise RuntimeError('OpenRouter returned an invalid response body; no action executed.')
+        return payload
+
+
 class CatalogRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     provider: Provider | None = None
@@ -34,7 +69,8 @@ class Rates(BaseModel):
 class LLMChoice(BaseModel):
     model_config = ConfigDict(extra='forbid')
     provider: Provider
-    model: str = Field(min_length=1, max_length=200, pattern=r'^[\w./:+-]+$')
+    # OpenRouter's catalog includes aliases such as ~anthropic/claude-haiku-latest.
+    model: str = Field(min_length=1, max_length=200, pattern=r'^[\w./:+~-]+$')
     rates: Rates = Field(default_factory=Rates)
 
 
