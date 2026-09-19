@@ -49,3 +49,31 @@ for (const status of ['failed', 'blocked', 'cancelled', 'timed_out', 'interrupte
 }
 assert.equal(compare({unsuccessful:true,complete:false},{complete:true,cost:1}).title,'NA');
 console.log('Unsuccessful runs: metrics suppressed');
+
+// Sorting must keep missing values last without changing execution order in the source.
+const run = (model, cost, seconds, tokens, extra = {}) => ({
+  kind: model === 'Jev' ? 'jev' : 'llm', model, status: 'completed', execution_ms: seconds * 1000,
+  usage: {calls: 1, groups: [{...text, input_tokens: tokens, output_tokens: 0, cached_tokens: 0,
+    cost_complete: true, reported_cost_usd: cost}]}, ...extra,
+});
+const runs = [
+  run('Jev', .02, 20, 200), run('Cheap', .01, 30, 300), run('Fast', .03, 10, 100),
+  run('Free', 0, 0, 0), run('Tie', .01, 30, 300),
+  run('Unknown', 0, 5, 0, {usage: {calls: 0, groups: []}}),
+  run('Partial tokens', .04, 40, 1, {usage: {calls: 1, groups: [{...text,
+    input_tokens: 1, output_tokens: 0, tokens_complete: false,
+    cost_complete: true, reported_cost_usd: .04}]}}),
+  run('Failed', 0, 0, 0, {status: 'failed'}),
+  run('Skipped', 0, 0, 0, {status: 'not_run'}),
+];
+vm.runInContext(`var sortRows = ${JSON.stringify(runs)}.map(row => ({row, m: batchMetrics(row, ${JSON.stringify(snapshot)})}));`, context);
+const sorted = (field, direction = 'asc') => JSON.parse(vm.runInContext(
+  `JSON.stringify(sortBatchRows(sortRows, '${field}', '${direction}').map(r => r.row.model))`, context));
+assert.deepEqual(sorted('cost'), ['Free', 'Cheap', 'Tie', 'Jev', 'Fast', 'Partial tokens', 'Unknown', 'Failed', 'Skipped']);
+assert.deepEqual(sorted('cost', 'desc'), ['Partial tokens', 'Fast', 'Jev', 'Cheap', 'Tie', 'Free', 'Unknown', 'Failed', 'Skipped']);
+assert.deepEqual(sorted('seconds'), ['Free', 'Unknown', 'Fast', 'Jev', 'Cheap', 'Tie', 'Partial tokens', 'Failed', 'Skipped']);
+assert.deepEqual(sorted('seconds', 'desc'), ['Partial tokens', 'Cheap', 'Tie', 'Jev', 'Fast', 'Unknown', 'Free', 'Failed', 'Skipped']);
+assert.deepEqual(sorted('tokens'), ['Free', 'Fast', 'Jev', 'Cheap', 'Tie', 'Unknown', 'Partial tokens', 'Failed', 'Skipped']);
+assert.deepEqual(sorted('tokens', 'desc'), ['Cheap', 'Tie', 'Jev', 'Fast', 'Free', 'Unknown', 'Partial tokens', 'Failed', 'Skipped']);
+assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(sortRows.map(r => r.row.model))', context)), runs.map(r => r.model));
+console.log('Batch sorting: cost, time, tokens, both directions, ties, zero, missing/partial totals, and unchanged execution order passed');

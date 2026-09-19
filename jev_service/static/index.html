@@ -43,7 +43,12 @@
   <section id="batch-results" class="batch-results" hidden>
     <div class="batch-heading"><h2>model comparison</h2><button id="batch-cancel" type="button" class="secondary">Stop comparison</button></div>
     <p id="batch-progress" role="status" aria-live="polite"></p>
-    <p class="hint">One run each · Jev first, then models in selection order · lower bars mean less spend or elapsed time, not better results. Unsuccessful runs show NA and are excluded from the bars. “Completed” is an agent claim unless a check passed.</p>
+    <p class="hint">One run each · execution order: Jev first, then models in selection order · lower bars mean less spend or elapsed time, not better results. Unsuccessful runs show NA and are excluded from the bars. “Completed” is an agent claim unless a check passed.</p>
+    <div class="batch-sort-controls">
+      <label for="batch-sort">Sort by<select id="batch-sort" aria-controls="batch-cost-chart batch-time-chart batch-table" aria-describedby="batch-sort-hint"><option value="cost">Total cost</option><option value="seconds">Time</option><option value="tokens">Tokens</option></select></label>
+      <label for="batch-sort-direction">Order<select id="batch-sort-direction" aria-controls="batch-cost-chart batch-time-chart batch-table" aria-describedby="batch-sort-hint"><option value="asc">Lowest first</option><option value="desc">Highest first</option></select></label>
+    </div>
+    <p id="batch-sort-hint" class="hint"></p>
     <div class="batch-charts"><section aria-label="API cost bar chart"><h3>Total API cost · USD</h3><div id="batch-cost-chart"></div></section><section aria-label="Elapsed time bar chart"><h3>Elapsed time · seconds</h3><div id="batch-time-chart"></div></section></div>
     <div class="batch-table-wrap"><table><caption>Run results, including Jev’s text helper cost. Timing excludes queue time.</caption><thead><tr><th>Model</th><th>Outcome</th><th>Seconds</th><th>Tokens</th><th>API cost</th><th>Cost / Jev</th></tr></thead><tbody id="batch-table"></tbody></table></div>
   </section>
